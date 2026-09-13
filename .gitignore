@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+coverage
+*.local
+.DS_Store
+.vite
+
+# Real bank statements must never be committed. Drop private PDFs here to run
+# the reference-dataset assertions locally; the directory stays untracked.
+tests/fixtures/private/
+*.pdf
+!tests/fixtures/generated/*.pdf
+*.tsbuildinfo
