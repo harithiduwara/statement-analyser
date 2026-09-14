@@ -101,8 +101,18 @@ export function analyseReversals(statements: readonly Statement[]): ReversalAnal
   const grossCredits = roundMoney(Math.abs(sumMoney(credits.map((t) => t.amount))));
   const matchedReversals = sumMoney(matches.map((m) => m.amount));
 
+  /*
+   * A credit is only "unexplained" when its class implies it should have
+   * reversed a debit and none was found -- i.e. a generic `reversal`. The
+   * other credit classes explain themselves: a payment settles the account,
+   * and an interest reversal, fuel-surcharge reversal or cashback is a
+   * standalone credit that never pairs with an origination. Flagging those as
+   * "a credit with no matching debit" would cry wolf on every ordinary
+   * surcharge refund and bury the real signal -- a purchase-shaped reversal
+   * with no purchase behind it, the bank-error case.
+   */
   const unmatchedCredits = credits.filter(
-    (c) => c.classification !== 'payment' && !byTxnId.has(c.id),
+    (c) => c.classification === 'reversal' && !byTxnId.has(c.id),
   );
 
   return {

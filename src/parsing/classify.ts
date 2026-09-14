@@ -62,7 +62,7 @@ const RULES: ClassifyRule[] = [
   // --- debits ------------------------------------------------------------
   {
     side: 'debit',
-    pattern: /\b(?:PROCESS(?:ING)?\s*FEE|PROC\.?\s*FEE|HANDLING\s*FEE|SERVICE\s*FEE)\b/i,
+    pattern: /\b(?:PROCESS(?:ING)?\s*FEES?|PROC\.?\s*FEES?|HANDLING\s*FEES?|SERVICE\s*FEES?)\b/i,
     className: 'installment_processing_fee',
     note: 'Recurring plan fee; folded into the plan instalment',
   },
@@ -73,7 +73,7 @@ const RULES: ClassifyRule[] = [
   },
   {
     side: 'debit',
-    pattern: /\b(?:ANNUAL\s*FEE|CARD\s*FEE|JOINING\s*FEE|RENEWAL\s*FEE|MEMBERSHIP\s*FEE)\b/i,
+    pattern: /\b(?:ANNUAL\s*FEES?|CARD\s*FEES?|JOINING\s*FEES?|RENEWAL\s*FEES?|MEMBERSHIP\s*FEES?)\b/i,
     className: 'annual_fee',
   },
   { side: 'debit', pattern: /\bSTAMP\s*DUTY\b/i, className: 'stamp_duty' },

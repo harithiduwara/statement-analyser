@@ -12,20 +12,21 @@ Build order from the brief, with step 1 complete:
 | Step | Scope | State |
 |---|---|---|
 | 1 | Types, Seylan parser, fixtures, reconciliation tests | **done** |
-| 2 | Sampath parser (embedded dates, multi-page) | not started |
+| 2 | Sampath parser (trilingual header, multi-page) | **done** |
 | 3 | `ReversalMatcher`, payments/reversals split | **done** |
 | 4 | Instalment registry, cost of credit | **done** |
 | 5 | Analytics: gaps, decomposition, forward schedule | **done** |
 | 6 | UI, categories, anomalies | **done** |
 | 7 | Excel export | not started |
 
-Seylan statements parse; Sampath does not yet, so the issuer registry has one
-adapter in it. Everything downstream of the parser is issuer-agnostic and will
-pick Sampath up without change.
+Both Seylan and Sampath statements parse, and a scanned image of either is
+read by OCR. Everything downstream of the parser is issuer-agnostic, so the
+Sampath adapter dropped in without a single change to the analysis or UI
+layers -- which is what the `DocumentLayer` / `StatementParser` seam was for.
 
 ```
 npm install
-npm test         # 93 tests
+npm test         # 104 tests
 npm run dev      # local dev server
 npm run dump     # prints the parser's reading of the fixture statement
 npm run build    # static build, deployable to any static host
@@ -131,6 +132,7 @@ src/parsing/classify.ts    transaction classification rules
 src/parsing/rewards.ts     the rewards identity solver
 src/parsing/parser.ts      StatementParser interface + issuer registry
 src/parsing/seylan/        the Seylan adapter
+src/parsing/sampath/       the Sampath adapter
 src/analysis/reconcile.ts  opening + charges - payments = closing
 src/state/                 in-memory statement library, duplicate detection
 src/ui/                    upload panel and statement view
@@ -358,6 +360,40 @@ Still open, and still failing loudly if wrong:
    except `purchase` — that would overstate spending and make the "surcharge
    levied without a matching reversal" anomaly undetectable.
 6. **Rewards pairs are left open rather than guessed.** See below.
+
+## Notes on the Sampath adapter
+
+Verified against three consecutive real statements; all three reconcile to the
+cent and their balance chain connects (each cycle closes where the next opens).
+What the real layout settled:
+
+- **Reconciliation is `opening + debits - credits = clearing`**, mapped
+  directly onto the shared model. "Credits" is gross -- it includes the
+  reversals of instalment originations as well as payments -- and the
+  ReversalMatcher separates the two afterwards.
+- **The header is trilingual.** Only the English column is read; the
+  Sinhala/Tamil rows come through as mojibake and are skipped. The value rows
+  are found by their own shape (account + dates + amounts), because pairing a
+  label row with the next line would catch the mojibake row between them.
+- **A credit opening balance** prints `10,000.00CR` when the account was
+  overpaid, and parses to a negative opening. (One of the sample cycles opened
+  46,951.80 in credit; without this it failed to reconcile.)
+- **The recurring processing-fee line carries no `n/m`**, so it inherits the
+  plan of the instalment repayment it follows -- otherwise the fee is not
+  folded into the plan's monthly cost.
+- **`(*)` marks account-level rows** (interest, some instalments) that name no
+  merchant; the marker is stripped for classification.
+
+Two things left deliberately conservative:
+
+- **A negative cost of credit is never shown.** It is arithmetically
+  impossible (the total repaid cannot be less than the principal), so when a
+  plan the issuer splits across two instalment lines, or a fuzzy merchant
+  match, produces one, the principal and cost are withheld as n/a rather than a
+  nonsensical figure presented.
+- **Sampath's loyalty-points table is not yet parsed** into the rewards view --
+  it is a different shape from Seylan's four-part identity, and inventing a
+  mapping would be guesswork.
 
 ## The reversal mechanic, and why every total depends on it
 
