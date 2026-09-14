@@ -1,10 +1,11 @@
 import {
+  POINTS_EPSILON,
   type CardSubtotal,
   type ParseWarning,
   type Statement,
   type Txn,
 } from '@/domain/types';
-import { parseDate } from '@/lib/dates';
+import { parseDate, resolveYearlessDate } from '@/lib/dates';
 import { moneyEquals, parseAmount, roundMoney, sumMoney } from '@/lib/money';
 import { maskCardNumber, scrubPan } from '@/lib/mask';
 import { classifyTxn, readSeylanPlanCode } from '../classify';
@@ -48,15 +49,47 @@ const FIELDS: readonly GridField[] = [
 const SUBTOTAL_RE =
   /\*+\s*CARD\s*[-–—]?\s*([0-9Xx*\s]{6,})\s*SUBTOTAL\s*[-–—]?\s*(?:LKR)?\s*([\d,]+\.\d{2}\s*(?:CR|DR)?)/i;
 
-/** A row leading with post date then transaction date. */
+/**
+ * A row leading with post date then transaction date.
+ *
+ * The year is optional because Seylan prints transaction dates as `DD/MM`
+ * and leaves the year to the statement header -- so a row reads `10/08 09/08`,
+ * not `10/08/26 09/08/26`. Requiring the year matched nothing at all.
+ */
 const TXN_LEAD_RE =
-  /^(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})\s+(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})\s+(.*)$/;
+  /^(\d{1,2}[/\-.]\d{1,2}(?:[/\-.]\d{2,4})?)\s+(\d{1,2}[/\-.]\d{1,2}(?:[/\-.]\d{2,4})?)\s+(.*)$/;
 
 /** A continuation line carrying the original currency of a foreign purchase. */
 const FOREIGN_RE = /^([A-Z]{3})\s+([\d,]+(?:\.\d{1,2})?)$/;
 
-/** An auth code or retrieval reference at the head of the description column. */
-const REFERENCE_RE = /^(\d{6,}|[A-Z]{1,3}\d{5,}|[A-Z0-9]{8,})$/;
+/**
+ * The reference at the head of the description column.
+ *
+ * Seylan prints it masked -- `****0770` -- which is a per-transaction auth
+ * reference, not a card: it differs on every row, while the card is named
+ * only in the per-card subtotal lines.
+ */
+const REFERENCE_RE = /^(\*{2,}\d{3,}|\d{6,}|[A-Z]{1,3}\d{5,}|[A-Z0-9]{8,})$/;
+
+/** `Seylan Rewards Points Details (For The Period)` -- the block's own heading. */
+const REWARDS_HEADING_RE = /Reward(?:s)?\s+Points\s+Details/i;
+
+/**
+ * The block as actually printed: one label per line with its value beside it.
+ *
+ *   Opening Balance      202
+ *   Points Accumulated 1,388
+ *   Points Adjusted        0
+ *   Points Redeemed      816
+ *   Points Balance       774
+ */
+const REWARDS_ROWS: { role: RewardsRole; pattern: RegExp }[] = [
+  { role: 'opening', pattern: /^Opening\s+(?:Balance|Points)\b/i },
+  { role: 'accumulated', pattern: /^Points?\s+Accumulated\b/i },
+  { role: 'adjusted', pattern: /^Points?\s+Adjust/i },
+  { role: 'redeemed', pattern: /^Points?\s+Redeem/i },
+  { role: 'balance', pattern: /^Points?\s+Balance\b/i },
+];
 
 const REWARDS_LABELS: { role: RewardsRole; pattern: RegExp }[] = [
   { role: 'opening', pattern: /\bOPENING\b/i },
@@ -132,6 +165,7 @@ export const seylanParser: StatementParser = {
       lines,
       doc.fileName,
       accountMask,
+      statementDate,
       warnings,
     );
 
@@ -259,6 +293,7 @@ function readTransactions(
   lines: readonly Line[],
   fileName: string,
   accountMask: string,
+  statementDate: string,
   warnings: Warnings,
 ): TransactionReadResult {
   const transactions: Txn[] = [];
@@ -293,7 +328,7 @@ function readTransactions(
       continue;
     }
 
-    const txn = readTransactionRow(line, fileName, index);
+    const txn = readTransactionRow(line, fileName, statementDate, index);
     if (txn) {
       transactions.push(txn);
       pending.push(txn);
@@ -312,12 +347,17 @@ function readTransactions(
   return { transactions, cardSubtotals };
 }
 
-function readTransactionRow(line: Line, fileName: string, index: number): Txn | undefined {
+function readTransactionRow(
+  line: Line,
+  fileName: string,
+  statementDate: string,
+  index: number,
+): Txn | undefined {
   const lead = TXN_LEAD_RE.exec(line.text.trim());
   if (!lead?.[1] || !lead[2] || lead[3] === undefined) return undefined;
 
-  const postDate = parseDate(lead[1]);
-  const txnDate = parseDate(lead[2]);
+  const postDate = readRowDate(lead[1], statementDate);
+  const txnDate = readRowDate(lead[2], statementDate);
   if (!postDate || !txnDate) return undefined;
 
   const amountRead = readTrailingAmount(line);
@@ -355,8 +395,28 @@ function readTransactionRow(line: Line, fileName: string, index: number): Txn | 
           installmentTerm: classification.installmentTerm,
         }),
     ...(planCode === undefined ? {} : { installmentPlanId: `seylan:${planCode}` }),
-    raw: line.text.trim(),
+    // Defence in depth: the row is kept verbatim for the drill-down, so it is
+    // scrubbed of anything card-shaped on the way in rather than on the way out.
+    raw: scrubPan(line.text.trim()),
   };
+}
+
+/**
+ * Resolve a transaction date that may carry no year.
+ *
+ * `10/08` on a statement dated 07/09/26 is August 2026, and `02/09` is
+ * September 2026 -- the cycle straddles a month boundary, and at a year
+ * boundary it straddles that too. The year is chosen as the one that puts
+ * the date nearest the statement date, rather than assumed to be the
+ * statement's own year.
+ */
+function readRowDate(raw: string, statementDate: string): string | undefined {
+  const withYear = parseDate(raw);
+  if (withYear) return withYear;
+
+  const parts = /^(\d{1,2})[/\-.](\d{1,2})$/.exec(raw);
+  if (!parts?.[1] || !parts[2] || statementDate === '') return undefined;
+  return resolveYearlessDate(Number(parts[1]), Number(parts[2]), statementDate);
 }
 
 /**
@@ -463,6 +523,89 @@ function checkSubtotals(statement: Statement, warnings: Warnings): void {
 // --- rewards ---------------------------------------------------------------
 
 function readRewards(
+  lines: readonly Line[],
+  grid: Map<string, GridHit>,
+  warnings: Warnings,
+): Statement['rewards'] {
+  // The printed layout pairs each label with its value on one line, which is
+  // unambiguous -- so read it directly and use the identity to check the
+  // reading rather than to discover it. The column form below remains as a
+  // fallback for a layout that puts the values in a separate row.
+  const vertical = readVerticalRewards(lines, warnings);
+  if (vertical) return vertical;
+
+  return readColumnRewards(lines, grid, warnings);
+}
+
+/** Read the one-label-per-line form, and verify the identity holds. */
+function readVerticalRewards(
+  lines: readonly Line[],
+  warnings: Warnings,
+): Statement['rewards'] {
+  const start = lines.findIndex((line) => REWARDS_HEADING_RE.test(line.text));
+  if (start === -1) return undefined;
+
+  const found = new Map<RewardsRole, number>();
+  for (const line of lines.slice(start + 1, start + 14)) {
+    const text = line.text.trim();
+    const row = REWARDS_ROWS.find((r) => r.pattern.test(text));
+    if (!row || found.has(row.role)) continue;
+    const value = trailingNumber(line);
+    if (value !== undefined) found.set(row.role, value);
+  }
+
+  const opening = found.get('opening');
+  const accumulated = found.get('accumulated');
+  const redeemed = found.get('redeemed');
+  const balance = found.get('balance');
+  // A block that prints no adjustment line is stating zero, not withholding it.
+  const adjusted = found.get('adjusted') ?? 0;
+
+  if (
+    opening === undefined ||
+    accumulated === undefined ||
+    redeemed === undefined ||
+    balance === undefined
+  ) {
+    return undefined; // fall through to the column reader
+  }
+
+  const observed = [opening, accumulated, redeemed, adjusted, balance];
+  const reconciled =
+    Math.abs(opening + accumulated - redeemed - adjusted - balance) < POINTS_EPSILON;
+
+  if (!reconciled) {
+    warnings.add(
+      'error',
+      'rewards-unreconciled',
+      `The rewards block reads opening ${opening} + accumulated ${accumulated} - redeemed ` +
+        `${redeemed} - adjusted ${adjusted}, which comes to ` +
+        `${opening + accumulated - redeemed - adjusted}, but it prints a balance of ${balance}.`,
+    );
+    return { reconciled: false, observed };
+  }
+
+  return {
+    opening,
+    accumulated,
+    redeemed,
+    adjusted,
+    balance,
+    reconciled: true,
+    observed,
+    method: 'labels',
+  };
+}
+
+/** The last amount-shaped token on a line. */
+function trailingNumber(line: Line): number | undefined {
+  const amounts = tokenise(line)
+    .map((t) => parseAmount(t.text))
+    .filter((a): a is NonNullable<typeof a> => a !== undefined);
+  return amounts[amounts.length - 1]?.value;
+}
+
+function readColumnRewards(
   lines: readonly Line[],
   grid: Map<string, GridHit>,
   warnings: Warnings,

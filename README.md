@@ -229,8 +229,10 @@ precise about what that does and does not cover.
 - **The PDF reader cannot fetch.** `getDocument` is handed local bytes with
   `useWorkerFetch: false` and no CMap or standard-font URL configured.
 - **Masking happens at extraction.** `maskCardNumber` runs on the header match
-  and the full value is discarded in the same expression; a test asserts no run
-  of 8+ digits survives into a parsed statement.
+  and the full value is discarded in the same expression; a test asserts no
+  card-shaped run survives into a parsed statement. The bar is 13 digits — the
+  shortest real card number — because a Seylan row carries a twelve-digit auth
+  reference that is not a card and must survive intact.
 - **Only preferences are persisted.** The two `localStorage` writers are the
   theme and the category rules, and a test asserts neither can reach a
   `Statement` or a `Txn`. Statements are held in memory and are gone on reload.
@@ -271,11 +273,27 @@ nothing else; after "Clear all data" it is empty.
 
 ## Assumptions in the Seylan adapter
 
-These are inferences from the described layout, not things I have verified
-against a real statement. Each one is a place the parser could be wrong on
-your PDFs, and each fails loudly rather than silently:
+The adapter has now been run against a real statement, so these are no longer
+guesses. What the real layout settled:
 
-1. **The finance charge is inside `New Charges & Debits`.** The `Finance
+- **Per-card subtotals are net movement** — confirmed. They summed to the
+  header's charges less payments to the cent.
+- **Transaction rows print `DD/MM` with no year.** The year lives only in the
+  header, and a cycle crosses a month boundary — so the year is resolved as
+  the one putting each row nearest the statement date, never assumed.
+- **The reference column is a masked auth code** (`****nnnn`), different on
+  every row. It is not a card; the card is named only in the subtotal lines.
+- **The rewards block is one label per line**, not a column grid — labels pair
+  with values unambiguously, so the identity is used to *check* the reading
+  rather than to discover it. (See below; the column reader remains as a
+  fallback.)
+- **A card number never appears in full** — the bank pre-masks it as
+  `40463300****2470`.
+
+Still open, and still failing loudly if wrong:
+
+1. **The finance charge is inside `New Charges & Debits`.** The statement I
+   have carries a zero finance charge, so it does not settle this either way. The `Finance
    Charge (int)` header field is read as a disclosure of the interest portion,
    not as an amount to add on top. If your issuer prints it outside the charges
    total, the invariant will fail by exactly the finance charge and
@@ -283,9 +301,8 @@ your PDFs, and each fails loudly rather than silently:
 2. **Per-card subtotals are net movement** (debits less credits for that card),
    not gross debits. Both per-card sums and their total are cross-checked
    against the header.
-3. **A reference is a leading token** of 6+ digits or 8+ alphanumerics at the
-   head of the description column. If Seylan prints references in their own
-   positional column, this should become a column read instead.
+3. **A reference is a leading token** at the head of the description column —
+   `****nnnn`, or 6+ digits, or 8+ alphanumerics.
 4. **Instalment plans are keyed on the issuer's own plan code when it prints
    one.** Seylan's `SP 010 of 036` appears on both the repayment and its
    processing fee, which is definitive. Falling back to the merchant name would

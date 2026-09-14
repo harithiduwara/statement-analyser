@@ -60,7 +60,14 @@ describe('card masking', () => {
 
   it('scrubs PAN-shaped runs from free text', () => {
     expect(scrubPan('card 4046330011112470 used')).toBe('card ****2470 used');
-    // A short number is not a PAN and must survive untouched.
+    expect(scrubPan('card 4046 3300 1111 2470')).toBe('card ****2470');
+  });
+
+  it('leaves a transaction reference alone', () => {
+    // Seylan prints a twelve-digit auth reference on every row. It is not a
+    // card number -- the shortest of those is thirteen digits -- and blanking
+    // it would destroy the only per-row identifier the statement gives.
     expect(scrubPan('ref 074512')).toBe('ref 074512');
+    expect(scrubPan('010249370770 CEFT PAYMENT')).toBe('010249370770 CEFT PAYMENT');
   });
 });

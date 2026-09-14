@@ -7,8 +7,13 @@
  * the original string in the same expression.
  */
 
-/** Any run of 12-19 digits, optionally separated by spaces, dashes or `*`. */
-const PAN_RE = /\b(?:\d[\s*x-]?){11,22}\d\b/gi;
+/**
+ * A PAN-shaped run: 13-19 digits, optionally separated by spaces, dashes or
+ * `*`. Thirteen is the floor because that is the shortest real card number
+ * (Visa); shorter runs are something else, and on a Seylan statement they are
+ * the twelve-digit per-transaction auth reference, which must survive intact.
+ */
+const PAN_RE = /\b(?:\d[\s*x-]?){12,22}\d\b/gi;
 
 /**
  * Reduce a printed card/account number to its last four digits.
@@ -35,7 +40,7 @@ export function formatMask(mask: string): string {
 export function scrubPan(text: string): string {
   return text.replace(PAN_RE, (match) => {
     const digits = match.replace(/\D/g, '');
-    if (digits.length < 12) return match; // too short to be a PAN; leave alone
+    if (digits.length < 13) return match; // too short to be a PAN; leave alone
     return `****${digits.slice(-4)}`;
   });
 }
