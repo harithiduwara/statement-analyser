@@ -31,22 +31,28 @@ async function loadPdfJs(): Promise<PdfJsModule> {
   return modulePromise;
 }
 
+/**
+ * Worker location, when something has set it explicitly.
+ *
+ * Node has no bundler to rewrite the bare specifier below, so the test setup
+ * resolves the worker itself and calls `setPdfWorkerSrc`. Keeping that out of
+ * this module means no `node:` import reaches the browser bundle -- Vite would
+ * otherwise externalise them into a stub chunk shipped to every visitor.
+ */
+let workerSrcOverride: string | undefined;
+
+export function setPdfWorkerSrc(src: string): void {
+  workerSrcOverride = src;
+}
+
 async function configureWorker(pdfjs: PdfJsModule): Promise<void> {
   const options = pdfjs.GlobalWorkerOptions;
   if (options.workerSrc) return;
 
-  if (typeof window === 'undefined') {
-    const { createRequire } = await import('node:module');
-    const { pathToFileURL } = await import('node:url');
-    const require = createRequire(import.meta.url);
-    const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
-    options.workerSrc = pathToFileURL(workerPath).href;
-  } else {
-    options.workerSrc = new URL(
-      'pdfjs-dist/legacy/build/pdf.worker.mjs',
-      import.meta.url,
-    ).href;
-  }
+  options.workerSrc =
+    workerSrcOverride ??
+    // Vite rewrites this to the hashed asset it emits, relative to the page.
+    new URL('pdfjs-dist/legacy/build/pdf.worker.mjs', import.meta.url).href;
 }
 
 export interface ExtractOptions {

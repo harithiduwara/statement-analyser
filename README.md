@@ -16,15 +16,30 @@ Build order from the brief, with step 1 complete:
 | 3 | `ReversalMatcher`, payments/reversals split | not started |
 | 4 | Instalment registry, cost of credit | not started |
 | 5 | Analytics: gaps, decomposition, forward schedule | not started |
-| 6 | UI, categories, anomalies | shell only |
+| 6 | UI, categories, anomalies | upload + parse + reconcile view only |
 | 7 | Excel export | not started |
 
 ```
 npm install
 npm test         # 34 tests
+npm run dev      # local dev server
 npm run dump     # prints the parser's reading of the fixture statement
 npm run build    # static build, deployable to any static host
 ```
+
+## Hosting
+
+Pushes to `main` or any `claude/**` branch run the test suite and, if it is
+green, publish `dist/` to GitHub Pages (`.github/workflows/deploy.yml`). A red
+suite blocks the deploy.
+
+The build uses a relative base (`base: './'`), so it works from a repository
+subpath, a custom domain or a local `file://` copy without reconfiguration.
+
+Hosting the page is safe precisely because the page does nothing server-side:
+it is static files, and every statement is read in the visitor's own browser.
+This was verified against the production build served from a subpath — the
+page issues **no off-origin requests at all**, before or during a parse.
 
 ## How it is put together
 
