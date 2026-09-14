@@ -294,7 +294,43 @@ describe('portfolio', () => {
     const p = buildPortfolio([]);
     expect(p.isEmpty).toBe(true);
     expect(p.trueObligation).toBe(0);
-    expect(p.monthlyRunRate).toBe(0);
+    expect(p.monthlyAverageSpend).toBe(0);
+    expect(p.monthlyAverageInstallment).toBe(0);
     expect(p.anomalies).toHaveLength(0);
+  });
+
+  it('averages spend and instalments over one cycle, reversed origination excluded', () => {
+    // The reversed 206,831 origination must not count as spend; only the
+    // 5,745.31 + 1,654.65 schedule and the 12,000 everyday purchase do.
+    const p = buildPortfolio([damroCycle('2026-04-06', 100_000)]);
+    expect(p.monthlyAverageSpend).toBe(19_399.96);
+    expect(p.monthlyAverageInstallment).toBe(7_399.96);
+    // The instalment slice can never exceed total spend.
+    expect(p.monthlyAverageInstallment).toBeLessThanOrEqual(p.monthlyAverageSpend);
+  });
+
+  it('divides by the number of cycles, not the number of transactions', () => {
+    const jan = statement({
+      date: '2026-01-05',
+      opening: 0,
+      transactions: [
+        txn({ post: '2026-01-10', description: 'KEELLS SUPER - NUGEGODA', amount: 10_000 }),
+        txn({ post: '2026-01-12', description: 'SOFA - DAMRO INSTALLMENT REPAYMENT 1/12', amount: 2_000 }),
+      ],
+    });
+    const feb = statement({
+      date: '2026-02-05',
+      opening: jan.closingBalance,
+      transactions: [
+        txn({ post: '2026-02-10', description: 'ODEL - COLOMBO', amount: 20_000 }),
+        txn({ post: '2026-02-12', description: 'SOFA - DAMRO INSTALLMENT REPAYMENT 2/12', amount: 2_000 }),
+        txn({ post: '2026-02-20', description: 'INTEREST', amount: 1_000, classification: 'interest' }),
+      ],
+    });
+    const p = buildPortfolio([jan, feb]);
+    // spend = (10,000 + 2,000) + (20,000 + 2,000 + 1,000) = 35,000 over 2 cycles
+    expect(p.monthlyAverageSpend).toBe(17_500);
+    // instalment = 2,000 + 2,000 = 4,000 over 2 cycles
+    expect(p.monthlyAverageInstallment).toBe(2_000);
   });
 });
