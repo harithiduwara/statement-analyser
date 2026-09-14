@@ -2,16 +2,182 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens.
+ *
+ * Colour roles come from a validated data-visualisation palette: the three
+ * categorical series slots clear the colourblind-separation, normal-vision and
+ * lightness gates in both light and dark. Dark is a selected set of steps for
+ * the dark surface, not an automatic inversion of light.
+ *
+ * Light-mode aqua (--series-3) sits below 3:1 on the light surface by design,
+ * so every chart using it carries a legend and direct labels; identity is
+ * never left to colour alone.
+ */
 @layer base {
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
+
+    --plane: #f4f4f1;
+    --surface: #fcfcfb;
+    --surface-raised: #ffffff;
+    --surface-sunken: #f0efec;
+
+    --ink: #0b0b0b;
+    --ink-secondary: #52514e;
+    --ink-muted: #898781;
+
+    --line: #e1e0d9;
+    --line-strong: #c3c2b7;
+
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+
+    --good: #0ca30c;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --focus: #2a78d6;
   }
+
+  :root:where(:not([data-theme='light'])) {
+    @media (prefers-color-scheme: dark) {
+      color-scheme: dark;
+
+      --plane: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-raised: #232322;
+      --surface-sunken: #131312;
+
+      --ink: #ffffff;
+      --ink-secondary: #c3c2b7;
+      --ink-muted: #898781;
+
+      --line: #2c2c2a;
+      --line-strong: #383835;
+
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+
+      --accent: #3987e5;
+      --accent-ink: #0b0b0b;
+      --focus: #3987e5;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --plane: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-raised: #232322;
+    --surface-sunken: #131312;
+
+    --ink: #ffffff;
+    --ink-secondary: #c3c2b7;
+    --ink-muted: #898781;
+
+    --line: #2c2c2a;
+    --line-strong: #383835;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+
+    --accent: #3987e5;
+    --accent-ink: #0b0b0b;
+    --focus: #3987e5;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
   body {
-    @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+    background: var(--plane);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  /* Every figure in this app is read in a column against other figures. */
+
+  /*
+   * Every figure in this app is read in a column against other figures, so
+   * columns of numbers get tabular figures. Standalone hero numbers keep the
+   * default proportional figures, which are better shaped on their own.
+   */
   .num {
     font-variant-numeric: tabular-nums;
-    @apply text-right font-mono;
+    text-align: right;
+    font-feature-settings: 'tnum';
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 6px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  /* Dense data table: hairline rules, sticky head, no zebra striping. */
+  .grid-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12.5px;
+  }
+  .grid-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-sunken);
+    color: var(--ink-muted);
+    font-weight: 600;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .grid-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .grid-table tbody tr:hover td {
+    background: var(--surface-sunken);
+  }
+  .grid-table th.right,
+  .grid-table td.right {
+    text-align: right;
   }
 }

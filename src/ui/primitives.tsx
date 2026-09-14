@@ -2,31 +2,42 @@ import type { ReactNode } from 'react';
 import { cn } from './lib';
 
 /**
- * Small presentational primitives. Deliberately plain: dense and readable
- * over decorative, and no component here decides anything about the data.
+ * Presentational primitives. Dense and readable over decorative; nothing here
+ * decides anything about the data it is handed.
  */
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
+export function Panel({
+  className,
+  children,
+  ...rest
+}: { className?: string; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <section
-      className={cn(
-        'rounded-lg border border-neutral-200 bg-white shadow-sm',
-        'dark:border-neutral-800 dark:bg-neutral-900',
-        className,
-      )}
-    >
+    <section className={cn('panel', className)} {...rest}>
       {children}
     </section>
   );
 }
 
-export function CardHeader({ title, subtitle, aside }: { title: ReactNode; subtitle?: ReactNode; aside?: ReactNode }) {
+export function PanelHeader({
+  title,
+  subtitle,
+  aside,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
-    <header className="flex items-start justify-between gap-4 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+    <header
+      className="flex flex-wrap items-start justify-between gap-3 px-4 py-3"
+      style={{ borderBottom: '1px solid var(--line)' }}
+    >
       <div className="min-w-0">
-        <h2 className="truncate text-sm font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-[13px] font-semibold tracking-tight">{title}</h2>
         {subtitle ? (
-          <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">{subtitle}</p>
+          <p className="mt-0.5 text-[11.5px]" style={{ color: 'var(--ink-muted)' }}>
+            {subtitle}
+          </p>
         ) : null}
       </div>
       {aside ? <div className="shrink-0">{aside}</div> : null}
@@ -34,24 +45,47 @@ export function CardHeader({ title, subtitle, aside }: { title: ReactNode; subti
   );
 }
 
-export type Tone = 'neutral' | 'pass' | 'fail' | 'warn' | 'info';
+export type Tone = 'neutral' | 'good' | 'warning' | 'serious' | 'critical' | 'accent';
 
-const TONE_CLASSES: Record<Tone, string> = {
-  neutral: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
-  pass: 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900',
-  fail: 'bg-red-50 text-red-800 ring-1 ring-red-200 dark:bg-red-950 dark:text-red-300 dark:ring-red-900',
-  warn: 'bg-amber-50 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900',
-  info: 'bg-sky-50 text-sky-800 ring-1 ring-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:ring-sky-900',
+const TONE_VAR: Record<Tone, string> = {
+  neutral: 'var(--ink-muted)',
+  good: 'var(--good)',
+  warning: 'var(--warning)',
+  serious: 'var(--serious)',
+  critical: 'var(--critical)',
+  accent: 'var(--accent)',
 };
 
-export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+/**
+ * A status chip. Status colour never carries the meaning alone -- the label
+ * is always present, and a dot marks the tone for anyone who cannot separate
+ * the hues.
+ */
+export function Chip({
+  tone = 'neutral',
+  children,
+  dot = true,
+}: {
+  tone?: Tone;
+  children: ReactNode;
+  dot?: boolean;
+}) {
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
-        TONE_CLASSES[tone],
-      )}
+      className="inline-flex items-center gap-1.5 rounded px-1.5 py-[3px] text-[11px] font-medium whitespace-nowrap"
+      style={{
+        color: tone === 'neutral' ? 'var(--ink-secondary)' : TONE_VAR[tone],
+        background: 'var(--surface-sunken)',
+        border: '1px solid var(--line)',
+      }}
     >
+      {dot ? (
+        <span
+          aria-hidden
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: TONE_VAR[tone] }}
+        />
+      ) : null}
       {children}
     </span>
   );
@@ -61,37 +95,117 @@ export function Button({
   onClick,
   children,
   variant = 'default',
-  type = 'button',
+  size = 'md',
+  disabled,
+  title,
 }: {
   onClick?: () => void;
   children: ReactNode;
-  variant?: 'default' | 'danger';
-  type?: 'button' | 'submit';
+  variant?: 'default' | 'primary' | 'danger' | 'ghost';
+  size?: 'sm' | 'md';
+  disabled?: boolean;
+  title?: string;
 }) {
+  const base =
+    'inline-flex items-center gap-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const sizing = size === 'sm' ? 'px-2 py-1 text-[11.5px]' : 'px-2.5 py-1.5 text-[12px]';
+
+  const style: React.CSSProperties =
+    variant === 'primary'
+      ? { background: 'var(--accent)', color: 'var(--accent-ink)', border: '1px solid transparent' }
+      : variant === 'danger'
+        ? { color: 'var(--critical)', border: '1px solid var(--line-strong)', background: 'transparent' }
+        : variant === 'ghost'
+          ? { color: 'var(--ink-secondary)', border: '1px solid transparent', background: 'transparent' }
+          : { color: 'var(--ink)', border: '1px solid var(--line-strong)', background: 'var(--surface)' };
+
   return (
     <button
-      type={type}
+      type="button"
       onClick={onClick}
-      className={cn(
-        'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
-        variant === 'danger'
-          ? 'border border-red-300 text-red-700 hover:bg-red-50 focus-visible:outline-red-600 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950'
-          : 'border border-neutral-300 hover:bg-neutral-100 focus-visible:outline-neutral-600 dark:border-neutral-700 dark:hover:bg-neutral-800',
-      )}
+      disabled={disabled}
+      title={title}
+      className={cn(base, sizing, !disabled && 'hover:brightness-95')}
+      style={style}
     >
       {children}
     </button>
   );
 }
 
-/**
- * A money cell. Tabular figures, right-aligned, credits in parentheses --
- * never colour alone, which would carry the sign for anyone who cannot
- * distinguish the colours.
- */
-export function Num({ children, className }: { children: ReactNode; className?: string }) {
+/** A labelled figure. Hero numbers keep proportional figures by design. */
+export function Stat({
+  label,
+  value,
+  hint,
+  tone,
+  unit = 'LKR',
+}: {
+  label: string;
+  value: string;
+  hint?: ReactNode;
+  tone?: Tone;
+  unit?: string | null;
+}) {
   return (
-    <span className={cn('num tabular-nums', className)}>{children}</span>
+    <div className="panel px-4 py-3">
+      <div
+        className="text-[10.5px] font-semibold uppercase tracking-[0.07em]"
+        style={{ color: 'var(--ink-muted)' }}
+      >
+        {label}
+        {unit ? <span className="ml-1 font-normal normal-case tracking-normal">· {unit}</span> : null}
+      </div>
+      <div
+        className="mt-1.5 text-[22px] font-semibold leading-none"
+        style={{ color: tone ? TONE_VAR[tone] : 'var(--ink)' }}
+      >
+        {value}
+      </div>
+      {hint ? (
+        <div className="mt-1.5 text-[11.5px] leading-snug" style={{ color: 'var(--ink-muted)' }}>
+          {hint}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function EmptyState({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div
+      className="panel flex flex-col items-center justify-center px-6 py-14 text-center"
+      style={{ borderStyle: 'dashed' }}
+    >
+      <p className="text-[13px] font-semibold">{title}</p>
+      {children ? (
+        <p
+          className="mt-1.5 max-w-md text-[12px] leading-relaxed"
+          style={{ color: 'var(--ink-muted)' }}
+        >
+          {children}
+        </p>
+      ) : null}
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  );
+}
+
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h3
+      className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.07em]"
+      style={{ color: 'var(--ink-muted)' }}
+    >
+      {children}
+    </h3>
   );
 }
