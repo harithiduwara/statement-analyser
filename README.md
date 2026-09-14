@@ -13,15 +13,19 @@ Build order from the brief, with step 1 complete:
 |---|---|---|
 | 1 | Types, Seylan parser, fixtures, reconciliation tests | **done** |
 | 2 | Sampath parser (embedded dates, multi-page) | not started |
-| 3 | `ReversalMatcher`, payments/reversals split | not started |
-| 4 | Instalment registry, cost of credit | not started |
-| 5 | Analytics: gaps, decomposition, forward schedule | not started |
-| 6 | UI, categories, anomalies | upload + parse + reconcile view only |
+| 3 | `ReversalMatcher`, payments/reversals split | **done** |
+| 4 | Instalment registry, cost of credit | **done** |
+| 5 | Analytics: gaps, decomposition, forward schedule | **done** |
+| 6 | UI, categories, anomalies | **done** |
 | 7 | Excel export | not started |
+
+Seylan statements parse; Sampath does not yet, so the issuer registry has one
+adapter in it. Everything downstream of the parser is issuer-agnostic and will
+pick Sampath up without change.
 
 ```
 npm install
-npm test         # 34 tests
+npm test         # 58 tests
 npm run dev      # local dev server
 npm run dump     # prints the parser's reading of the fixture statement
 npm run build    # static build, deployable to any static host
@@ -147,6 +151,34 @@ To run the parser against your own statements locally, drop them in
 `tests/fixtures/private/` — that directory and all `*.pdf` files are
 gitignored.
 
+## The app
+
+Seven routes, all client-side, hash-routed so the build works from a
+repository subpath or a local `file://` copy with no server to rewrite paths.
+
+| Route | What it answers |
+|---|---|
+| **Upload** | Per-file parse status, and why a file was refused |
+| **Overview** | Position per card, true obligation, and what looks wrong |
+| **Cycles** | The reconciliation table, with missing statements marked inline |
+| **Instalments** | The plan register and what each plan costs to carry |
+| **Forward** | The obligation curve, and what settling a plan early is worth |
+| **Categories** | Spend by purpose, on an economic or a cash basis |
+| **Transactions** | Every line, filterable, with CSV export |
+
+Three things in the UI are load-bearing rather than decorative:
+
+- **Series colours are validated, not chosen by eye.** The three categorical
+  slots clear colourblind-separation, normal-vision and lightness gates against
+  both the light and the dark surface. Dark is a selected set of steps for the
+  dark surface, not an inversion of light. Light-mode aqua sits under 3:1 by
+  design, so every chart using it carries a legend and direct labels — colour
+  never carries identity alone.
+- **No chart without a stated unit**, and no dual-axis chart anywhere. Monthly
+  obligation and cumulative outflow differ by an order of magnitude, so they are
+  two charts rather than two y-scales on one.
+- **Charts do not animate.** A dense analytical view is read, not watched.
+
 ## Privacy properties, and how they are enforced
 
 - **Masking happens at extraction.** `maskCardNumber` is called on the header
@@ -174,11 +206,46 @@ your PDFs, and each fails loudly rather than silently:
 3. **A reference is a leading token** of 6+ digits or 8+ alphanumerics at the
    head of the description column. If Seylan prints references in their own
    positional column, this should become a column read instead.
-4. **`fuel_surcharge` was added to `TxnClass`.** The specified set had only
+4. **Instalment plans are keyed on the issuer's own plan code when it prints
+   one.** Seylan's `SP 010 of 036` appears on both the repayment and its
+   processing fee, which is definitive. Falling back to the merchant name would
+   split them — the fee line names no merchant at all, since every word in
+   `EASY PAY PROCESSING FEE` is programme wording. Sampath prints no such code,
+   and there the fee line does repeat the merchant, so merchant plus term is the
+   right key.
+5. **`fuel_surcharge` was added to `TxnClass`.** The specified set had only
    `fuel_surcharge_reversal`, which left the levy itself with nowhere to go
    except `purchase` — that would overstate spending and make the "surcharge
    levied without a matching reversal" anomaly undetectable.
-5. **Rewards pairs are left open rather than guessed.** See below.
+6. **Rewards pairs are left open rather than guessed.** See below.
+
+## The reversal mechanic, and why every total depends on it
+
+An instalment purchase is not one line. The issuer posts the purchase at full
+value, reverses it the next day, and re-books it as a schedule:
+
+```
+15/03  DAMRO - KOTTAWA                        206,831.00     origination
+16/03  DAMRO - KOTTAWA                        206,831.00CR   reversal
+16/03  DAMRO INSTALLMENT REPAYMENT 1/36         5,745.31     first instalment
+16/03  DAMRO INSTALLMENT PROCESSING FEES        1,654.65     recurring fee
+```
+
+Summing gross debits counts that purchase twice — once at full value and again
+as its schedule. Treating the credit as a payment says the cardholder settled
+206,831 they never paid. So `ReversalMatcher` pairs each origination with its
+reversal on amount, a short date window and a fuzzy merchant match, and
+`trueCharges = grossDebits − matchedReversals`. Every credit is then either a
+payment or a reversal, decided line by line.
+
+Two consequences worth stating:
+
+- **A reversed charge that was never financed is not spending in either view.**
+  A fuel surcharge levied and refunded did not happen. Only a reversal that was
+  re-booked as a plan counts at full value in the economic view.
+- **A credit with no matching debit anywhere is reported, not absorbed.** Either
+  the originating cycle is not loaded, or the bank credited something it never
+  charged. Both are worth knowing; neither is silently netted off.
 
 ## Two decisions worth knowing about
 
