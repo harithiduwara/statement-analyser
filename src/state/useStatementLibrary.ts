@@ -3,6 +3,7 @@ import type { Statement } from '@/domain/types';
 import { extractFromFile } from '@/parsing/pdf';
 import { parseDocument } from '@/parsing/parser';
 import { reconcile } from '@/analysis/reconcile';
+import { explainFailure } from '@/parsing/capabilities';
 import type { Reconciliation } from '@/domain/types';
 import '@/parsing/seylan';
 
@@ -136,7 +137,9 @@ async function parseOne(file: File): Promise<ParseOutcome> {
       state: {
         kind: 'error',
         fileName: file.name,
-        message: err instanceof Error ? err.message : String(err),
+        // A raw engine error here is almost always an unsupported browser
+        // rather than a bad file, and saying which is the whole difference.
+        message: explainFailure(err),
       },
     };
   }

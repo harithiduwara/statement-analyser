@@ -11,6 +11,7 @@ import {
   Tags,
   Upload as UploadIcon,
 } from 'lucide-react';
+import { missingCapabilities } from '@/parsing/capabilities';
 import { useStatementLibrary } from '@/state/useStatementLibrary';
 import { useCategoryRules } from '@/state/useCategoryRules';
 import { buildPortfolio } from '@/analysis/portfolio';
@@ -93,7 +94,7 @@ export function App() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
-          className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+          className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5"
           style={{ background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}
         >
           <div className="min-w-0">
@@ -125,7 +126,10 @@ export function App() {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 px-5 py-5">
+        <MobileNav route={route} navigate={navigate} disabled={portfolio.isEmpty} />
+
+        <main className="min-w-0 flex-1 px-4 py-4 sm:px-5 sm:py-5">
+          <BrowserWarning />
           {route === 'upload' ? (
             <UploadView files={files} busy={busy} onAdd={addFiles} onClear={clearEverything} />
           ) : null}
@@ -158,6 +162,81 @@ export function App() {
           advice.
         </footer>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Horizontal navigation for narrow screens, where the sidebar is hidden.
+ * Without it a phone can reach the upload view and nothing else.
+ */
+function MobileNav({
+  route,
+  navigate,
+  disabled,
+}: {
+  route: Route;
+  navigate: (r: Route) => void;
+  disabled: boolean;
+}) {
+  return (
+    <nav
+      className="flex gap-1 overflow-x-auto px-3 py-2 md:hidden"
+      style={{ background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}
+      aria-label="Sections"
+    >
+      {NAV.map((item) => {
+        const active = route === item.route;
+        const off = disabled && item.route !== 'upload';
+        const Icon = item.icon;
+        return (
+          <a
+            key={item.route}
+            href={href(item.route)}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(item.route);
+            }}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium whitespace-nowrap',
+              off && 'opacity-45',
+            )}
+            style={{
+              background: active ? 'var(--accent)' : 'var(--surface-sunken)',
+              color: active ? 'var(--accent-ink)' : 'var(--ink-secondary)',
+              border: '1px solid var(--line)',
+            }}
+          >
+            <Icon size={13} aria-hidden />
+            {item.label}
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * Shown only when a capability the PDF reader needs is genuinely absent after
+ * the shims have run -- so the reader learns the cause before uploading a file
+ * and being told, by the browser, that undefined is not a function.
+ */
+function BrowserWarning() {
+  const missing = useMemo(() => missingCapabilities(), []);
+  if (missing.length === 0) return null;
+  return (
+    <div
+      className="panel mb-4 px-4 py-3 text-[12px] leading-relaxed"
+      style={{ borderColor: 'var(--critical)' }}
+    >
+      <p className="font-semibold" style={{ color: 'var(--critical)' }}>
+        This browser is missing something the PDF reader needs
+      </p>
+      <p className="mt-1" style={{ color: 'var(--ink-secondary)' }}>
+        Not available here: {missing.join(', ')}. Reading a statement will probably fail. Updating
+        the browser — on iPhone, Settings › General › Software Update — should fix it.
+      </p>
     </div>
   );
 }
