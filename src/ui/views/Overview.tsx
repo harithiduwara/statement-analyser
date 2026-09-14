@@ -50,18 +50,23 @@ export function OverviewView({
           hint="Statement balance plus instalments still contracted but not yet billed"
         />
         <Stat
-          label="Monthly instalments"
-          value={formatMoney(register.monthlyObligation)}
-          hint={`${register.plans.filter((p) => p.remaining > 0).length} live plan(s), repayment and recurring fee together`}
+          label="Avg monthly spend"
+          value={formatMoney(portfolio.monthlyAverageSpend)}
+          hint={`Mean charges per cycle across ${portfolio.statements.length} cycle${portfolio.statements.length === 1 ? '' : 's'}, reversals removed`}
         />
         <Stat
-          label="Run rate"
-          value={formatMoney(portfolio.monthlyRunRate)}
-          hint={`Mean true charges per cycle across ${portfolio.statements.length} cycle(s)`}
+          label="Avg monthly instalment"
+          value={formatMoney(portfolio.monthlyAverageInstallment)}
+          hint={`Mean instalment charges — repayment and fee — billed per cycle across ${portfolio.statements.length} cycle${portfolio.statements.length === 1 ? '' : 's'}`}
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label="Monthly instalments"
+          value={formatMoney(register.monthlyObligation)}
+          hint={`Contracted now across ${register.plans.filter((p) => p.remaining > 0).length} live plan(s), repayment and recurring fee together`}
+        />
         <Stat
           label="Cycles reconciling"
           value={`${recon.passed} of ${recon.total}`}

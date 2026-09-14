@@ -52,8 +52,10 @@ export interface Portfolio {
    * actually owed, as opposed to what this month's statements happen to show.
    */
   trueObligation: Money;
-  /** Mean true charges per cycle. */
-  monthlyRunRate: Money;
+  /** Mean charges per cycle, reversals removed -- what the card is used for, per month. */
+  monthlyAverageSpend: Money;
+  /** Mean instalment charges (repayment and processing fee) billed per cycle. */
+  monthlyAverageInstallment: Money;
   isEmpty: boolean;
 }
 
@@ -76,8 +78,15 @@ export function buildPortfolio(statements: readonly Statement[]): Portfolio {
   );
 
   const cycleCount = ordered.length;
-  const monthlyRunRate =
-    cycleCount === 0 ? 0 : roundMoney(reversals.trueCharges / cycleCount);
+  // Averaged from the per-cycle decomposition rather than the reversal totals
+  // so spend and its instalment component share one denominator and one
+  // reversal treatment -- the instalment average can never exceed spend.
+  const mean = (pick: (d: CycleDecomposition) => Money): Money =>
+    cycleCount === 0
+      ? 0
+      : roundMoney(decomposition.reduce((acc, d) => acc + pick(d), 0) / cycleCount);
+  const monthlyAverageSpend = mean((d) => d.trueCharges);
+  const monthlyAverageInstallment = mean((d) => d.instalments);
 
   return {
     statements: ordered,
@@ -92,7 +101,8 @@ export function buildPortfolio(statements: readonly Statement[]): Portfolio {
     positions,
     statementBalance,
     trueObligation: roundMoney(statementBalance + register.totalRemaining),
-    monthlyRunRate,
+    monthlyAverageSpend,
+    monthlyAverageInstallment,
     isEmpty: ordered.length === 0,
   };
 }
