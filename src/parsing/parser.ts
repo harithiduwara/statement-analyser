@@ -63,15 +63,20 @@ export function detectParser(doc: DocumentLayer): Detection | undefined {
 export function parseDocument(doc: DocumentLayer): ParseResult {
   const detection = detectParser(doc);
   if (!detection) {
+    const supported = registeredParsers().map((p) => p.label);
     const ranked = detectAll(doc)
       .map((d) => `${d.parser.label} ${(d.confidence * 100).toFixed(0)}%`)
       .join(', ');
     return {
       ok: false,
       warnings: [],
+      // Name what is supported. "Could not identify the issuer" on a
+      // perfectly good statement reads as a bug in the file rather than as a
+      // parser that has not been written yet.
       error:
-        `Could not identify the issuer of this statement.` +
-        (ranked ? ` Best guesses: ${ranked}.` : ''),
+        `This does not match any statement format that has been implemented yet. ` +
+        `Supported so far: ${supported.join(', ')}.` +
+        (ranked ? ` Closest match: ${ranked}.` : ''),
       sourceFileName: doc.fileName,
     };
   }

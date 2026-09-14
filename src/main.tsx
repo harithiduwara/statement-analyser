@@ -1,3 +1,7 @@
+// First import in the app: the shims must be installed before pdf.js, or
+// anything else that assumes a current browser, is evaluated.
+import './parsing/compat.js';
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
