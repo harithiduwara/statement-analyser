@@ -25,7 +25,7 @@ pick Sampath up without change.
 
 ```
 npm install
-npm test         # 58 tests
+npm test         # 61 tests
 npm run dev      # local dev server
 npm run dump     # prints the parser's reading of the fixture statement
 npm run build    # static build, deployable to any static host
@@ -178,6 +178,26 @@ Three things in the UI are load-bearing rather than decorative:
   obligation and cumulative outflow differ by an order of magnitude, so they are
   two charts rather than two y-scales on one.
 - **Charts do not animate.** A dense analytical view is read, not watched.
+
+## Browser support
+
+pdf.js calls `Promise.withResolvers` (Safari 17.4, March 2024) and
+`Object.hasOwn` (Safari 15.4). Its `legacy` build transpiles modern *syntax*
+but does not polyfill modern *APIs*, so on an iPhone a version or two behind,
+reading a statement failed before a single page was parsed — and Safari
+reports a missing API only as `undefined is not a function`, which sends the
+reader looking for a problem in their statement.
+
+`src/parsing/compat.js` shims both, plus `at`, `findLast` and `findLastIndex`.
+It is plain script source with no imports, because the same file is prepended
+verbatim to the pdf.js **worker** bundle at build time — a worker has its own
+global scope that a page-level polyfill never reaches, and the worker is where
+pdf.js does most of its work. The Vite plugin that does this fails the build if
+it finds no worker asset, since the failure it prevents only shows up on
+someone else's device.
+
+Anything still missing after the shims is reported by name, with the update
+path, rather than as the browser's own wording.
 
 ## Privacy properties, and how they are enforced
 
