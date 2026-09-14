@@ -41,7 +41,11 @@ export function useCategoryRules() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(rules));
+      // The seeds are the default, so storing them would be redundant -- and
+      // it would mean "Clear all data" wiped the key only to write it back a
+      // tick later. Holding the default as absence keeps the control honest.
+      if (rules === SEED_RULES) localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, JSON.stringify(rules));
     } catch {
       // The rules still apply for this session.
     }
@@ -49,12 +53,8 @@ export function useCategoryRules() {
 
   const reset = useCallback(() => setRules(SEED_RULES), []);
 
+  /** Drop the stored rules entirely and return to the built-in set. */
   const clearStored = useCallback(() => {
-    try {
-      localStorage.removeItem(KEY);
-    } catch {
-      // Nothing to clear.
-    }
     setRules(SEED_RULES);
   }, []);
 
