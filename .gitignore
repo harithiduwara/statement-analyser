@@ -12,3 +12,6 @@ tests/fixtures/private/
 *.pdf
 !tests/fixtures/generated/*.pdf
 *.tsbuildinfo
+
+# OCR engine files, copied from node_modules at build time.
+public/tesseract/

@@ -24,6 +24,12 @@ export interface PageSpec {
   width?: number;
   height?: number;
   items: PlacedText[];
+  /**
+   * A full-page JPEG, making the page an image with no text layer at all --
+   * which is what a scanned statement is. Used to exercise the OCR path
+   * against something genuinely unreadable rather than a simulation of one.
+   */
+  image?: { jpeg: Uint8Array; width: number; height: number };
 }
 
 const A4_WIDTH = 595.28;
@@ -35,6 +41,12 @@ function escapeText(s: string): string {
 
 function contentStream(page: PageSpec): string {
   const parts: string[] = [];
+  if (page.image) {
+    const w = page.width ?? A4_WIDTH;
+    const h = page.height ?? A4_HEIGHT;
+    // Scale the bitmap to fill the page: `cm` sets the image's unit square.
+    parts.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} 0 0 cm /Im0 Do Q`);
+  }
   for (const item of page.items) {
     const size = item.size ?? 8;
     const font = item.bold ? '/F2' : '/F1';
@@ -66,11 +78,12 @@ export function makePdf(pages: PageSpec[]): Uint8Array {
 
   const pageCount = pages.length;
   // Object numbering: 1 catalog, 2 pages, then per page [page, contents],
-  // then 2 font objects at the end.
+  // then 2 font objects, then one image object per page that has one.
   const pageObjNum = (i: number): number => 3 + i * 2;
   const contentObjNum = (i: number): number => 4 + i * 2;
   const fontRegularNum = 3 + pageCount * 2;
   const fontBoldNum = fontRegularNum + 1;
+  const imageObjNum = (i: number): number => fontBoldNum + 1 + i;
 
   startObject();
   push(`1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`);
@@ -83,9 +96,10 @@ export function makePdf(pages: PageSpec[]): Uint8Array {
     const w = page.width ?? A4_WIDTH;
     const h = page.height ?? A4_HEIGHT;
     startObject();
+    const xobject = page.image ? ` /XObject << /Im0 ${imageObjNum(i)} 0 R >>` : '';
     push(
       `${pageObjNum(i)} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w.toFixed(2)} ${h.toFixed(2)}] ` +
-        `/Resources << /Font << /F1 ${fontRegularNum} 0 R /F2 ${fontBoldNum} 0 R >> >> ` +
+        `/Resources << /Font << /F1 ${fontRegularNum} 0 R /F2 ${fontBoldNum} 0 R >>${xobject} >> ` +
         `/Contents ${contentObjNum(i)} 0 R >>\nendobj\n`,
     );
 
@@ -100,6 +114,17 @@ export function makePdf(pages: PageSpec[]): Uint8Array {
   push(`${fontRegularNum} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`);
   startObject();
   push(`${fontBoldNum} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n`);
+
+  pages.forEach((page, i) => {
+    if (!page.image) return;
+    startObject();
+    const jpeg = Buffer.from(page.image.jpeg).toString('latin1');
+    push(
+      `${imageObjNum(i)} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${page.image.width} ` +
+        `/Height ${page.image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
+        `/Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n${jpeg}\nendstream\nendobj\n`,
+    );
+  });
 
   const xrefStart = position;
   const objectCount = offsets.length + 1; // +1 for the free object 0

@@ -190,6 +190,9 @@ export const seylanParser: StatementParser = {
       ...(rewards === undefined ? {} : { rewards }),
       ...(cardSubtotals.length === 0 ? {} : { cardSubtotals }),
       sourceFileName: doc.fileName,
+      // Overwritten by the loader when the layer came from OCR; a parser
+      // cannot tell, and should not guess.
+      source: 'text',
       pageCount: doc.pages.length,
       warnings: warnings.list,
     };
@@ -222,7 +225,15 @@ function readMask(grid: Map<string, GridHit>, warnings: Warnings): string {
   // assigned to a variable that outlives this call, or logged.
   const mask = maskCardNumber(raw);
   if (!mask) {
-    warnings.add('error', 'missing-card-number', 'Card number not found in the header grid.');
+    warnings.add(
+      'error',
+      'missing-card-number',
+      'The card number could not be read from the header. On a scanned statement this is the ' +
+        'usual casualty: the number is printed mostly as asterisks (****2470), and character ' +
+        'recognition reads runs of asterisks poorly. The cycle can still be reconciled, but this ' +
+        'statement cannot be matched to others from the same card, so the balance chain and the ' +
+        'per-card position will be unreliable until a text-layer copy is loaded.',
+    );
     return '????';
   }
   return mask;

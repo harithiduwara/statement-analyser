@@ -189,6 +189,14 @@ export interface Statement {
   rewards?: RewardsBlock;
   cardSubtotals?: CardSubtotal[];
   sourceFileName: string;
+  /**
+   * How the text was obtained. `ocr` means the figures were read off an image
+   * and could be wrong in ways that still look like money -- so an `ocr`
+   * statement is only believed once the reconciliation invariant confirms it.
+   */
+  source: 'text' | 'ocr';
+  /** Mean OCR word confidence, 0-100. Only present when `source` is `ocr`. */
+  ocrConfidence?: number;
   /** Page count of the source PDF, for the parse report. */
   pageCount?: number;
   /** Non-fatal observations raised while parsing this statement. */

@@ -55,6 +55,31 @@ async function configureWorker(pdfjs: PdfJsModule): Promise<void> {
     new URL('pdfjs-dist/legacy/build/pdf.worker.mjs', import.meta.url).href;
 }
 
+/**
+ * Open a PDF with this app's settings, and hand back a way to close it.
+ *
+ * Shared so the OCR path renders pages through exactly the same configuration
+ * the text path reads them through -- in particular the same refusal to fetch
+ * anything. A second `getDocument` call with its own options would be a second
+ * place for a network setting to drift.
+ */
+export async function getPdfDocument(data: Uint8Array | ArrayBuffer) {
+  const pdfjs = await loadPdfJs();
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+
+  const task = pdfjs.getDocument({
+    // pdf.js transfers and neuters the buffer it is handed; copy so callers
+    // can re-read the same File (e.g. to retry through OCR).
+    data: bytes.slice(),
+    useWorkerFetch: false,
+    disableFontFace: true,
+    verbosity: 0,
+  });
+
+  const doc = await task.promise;
+  return { doc, destroy: () => task.destroy() };
+}
+
 export interface ExtractOptions {
   fileName: string;
   /** Abort a runaway parse rather than hanging the tab. */
@@ -66,22 +91,7 @@ export async function extractTextLayer(
   data: Uint8Array | ArrayBuffer,
   options: ExtractOptions,
 ): Promise<DocumentLayer> {
-  const pdfjs = await loadPdfJs();
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-
-  const task = pdfjs.getDocument({
-    // pdf.js transfers and neuters the buffer it is handed; copy so callers
-    // can re-read the same File (e.g. to retry with another parser).
-    data: bytes.slice(),
-    useWorkerFetch: false,
-    disableFontFace: true,
-    // Text extraction needs no glyph outlines; quieten the standard-font
-    // warning that follows from deliberately configuring no font URL.
-    verbosity: 0,
-    // No standard-font or CMap URL is configured, so pdf.js cannot fetch.
-  });
-
-  const doc = await task.promise;
+  const { doc, destroy } = await getPdfDocument(data);
   try {
     const pageCount = Math.min(doc.numPages, options.maxPages ?? 64);
     const pages: PageLayer[] = [];
@@ -124,8 +134,7 @@ export async function extractTextLayer(
 
     return { fileName: options.fileName, pages };
   } finally {
-    // `destroy` lives on the loading task, not the document proxy.
-    await task.destroy();
+    await destroy();
   }
 }
 

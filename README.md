@@ -25,7 +25,7 @@ pick Sampath up without change.
 
 ```
 npm install
-npm test         # 61 tests
+npm test         # 93 tests
 npm run dev      # local dev server
 npm run dump     # prints the parser's reading of the fixture statement
 npm run build    # static build, deployable to any static host
@@ -138,6 +138,49 @@ src/ui/                    upload panel and statement view
 
 Adding a third issuer is a new file implementing `StatementParser` plus one
 `registerParser` call. Nothing else changes.
+
+### Scanned statements
+
+A statement with no text layer — a scan, or a photo — is read by character
+recognition instead. `assessTextLayer` decides: a real statement page runs to
+thousands of characters, a scanner's page stamp to a handful, and nothing
+legitimate sits between.
+
+The engine is a WebAssembly build of Tesseract, and **it runs here like
+everything else**. Its worker, core and language data are copied into the
+build from `node_modules` and served from this origin — tesseract.js
+otherwise fetches them from a CDN, which would be an off-origin request on a
+page whose whole claim is that it makes none. A test asserts those paths stay
+pinned. They are ~7 MB, so they load only when a scanned file is actually
+opened; a reader with ordinary statements never downloads them.
+
+**OCR output is not believed on its own.** Every figure it returns could be
+wrong in a way that still looks like money, so the reading is gated on
+arithmetic it cannot satisfy by accident:
+
+- a cycle that satisfies `opening + charges − payments = closing` **and**
+  whose per-card subtotals agree has passed two independent checksums — a
+  misread digit breaks both, so the figures can be relied on, and the app
+  says so;
+- a cycle that does not is reported as untrustworthy and excluded from every
+  total, rather than shown as if it were read from a text layer.
+
+Descriptions are covered by no such sum, and the wording says so.
+
+Two things the arithmetic cannot rescue, both seen on a real 150 DPI scan:
+
+- **The card number does not survive.** It is printed mostly as asterisks
+  (`****2470`) and Tesseract reads runs of asterisks poorly. The cycle still
+  reconciles, but the statement cannot be matched to others from the same
+  card, and the parser says exactly that rather than quietly showing `????`.
+- **The foreign-currency code** on a continuation line can be lost, leaving
+  the amount unattached. It is dropped rather than guessed.
+
+Row grouping differs for OCR. A PDF puts every glyph on an exact baseline; OCR
+reports a box around the ink it found, whose bottom edge moves with whatever
+the word contains. Grouping those by baseline tore rows apart — the amount
+landed on a line of its own and five of eleven transactions silently vanished
+— so OCR rows are grouped by vertical overlap instead.
 
 ### Fixtures
 

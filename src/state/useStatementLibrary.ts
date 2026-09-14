@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Statement } from '@/domain/types';
-import { extractFromFile } from '@/parsing/pdf';
+import { extractTextLayer } from '@/parsing/pdf';
+import { assessTextLayer } from '@/parsing/scan';
 import { parseDocument } from '@/parsing/parser';
 import { reconcile } from '@/analysis/reconcile';
 import { explainFailure } from '@/parsing/capabilities';
@@ -18,6 +19,14 @@ import '@/parsing/seylan';
 
 export type FileState =
   | { kind: 'parsing'; fileName: string }
+  | {
+      kind: 'ocr';
+      fileName: string;
+      page: number;
+      pageCount: number;
+      progress: number;
+      status: string;
+    }
   | { kind: 'ok'; fileName: string; statement: Statement; reconciliation: Reconciliation }
   | { kind: 'duplicate'; fileName: string; existingFileName: string; statementId: string }
   | {
@@ -92,7 +101,15 @@ export function useStatementLibrary(): Library {
     ]);
 
     for (const file of incoming) {
-      const outcome = await parseOne(file);
+      const outcome = await parseOne(file, (progress) => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.fileName === file.name && (f.kind === 'parsing' || f.kind === 'ocr')
+              ? { kind: 'ocr', fileName: file.name, ...progress }
+              : f,
+          ),
+        );
+      });
 
       // Dedupe inside the state update rather than against a snapshot, so two
       // files dropped together cannot both pass the check and both be added.
@@ -117,20 +134,66 @@ type ParseOutcome =
   | { kind: 'parsed'; statement: Statement }
   | { kind: 'failed'; state: FileState };
 
-async function parseOne(file: File): Promise<ParseOutcome> {
+async function parseOne(
+  file: File,
+  onOcrProgress: (progress: {
+    page: number;
+    pageCount: number;
+    progress: number;
+    status: string;
+  }) => void,
+): Promise<ParseOutcome> {
   try {
-    const result = parseDocument(await extractFromFile(file));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const layer = await extractTextLayer(bytes, { fileName: file.name });
+    const assessment = assessTextLayer(layer);
+
+    /*
+     * A statement with no usable text layer is an image. Rather than refusing
+     * it, read it with character recognition -- and record that this is what
+     * happened, because a figure read off a picture has to earn belief that a
+     * figure read from a text layer does not.
+     */
+    let source: 'text' | 'ocr' = 'text';
+    let ocrConfidence: number | undefined;
+    let toParse = layer;
+
+    if (assessment.verdict !== 'text') {
+      const { ocrDocument } = await import('@/parsing/ocr');
+      const ocr = await ocrDocument(bytes, {
+        fileName: file.name,
+        onProgress: onOcrProgress,
+      });
+      toParse = ocr.layer;
+      source = 'ocr';
+      ocrConfidence = ocr.confidence;
+    }
+
+    const result = parseDocument(toParse);
     if (!result.ok || !result.statement) {
       return {
         kind: 'failed',
         state: {
           kind: 'error',
           fileName: file.name,
-          message: result.error ?? 'The parser returned no statement.',
+          message:
+            source === 'ocr'
+              ? `${result.error ?? 'The parser returned no statement.'} This file was a scan, ` +
+                `so the text was read by character recognition — a poor scan can leave the layout ` +
+                `unrecognisable even when individual words come out.`
+              : (result.error ?? 'The parser returned no statement.'),
         },
       };
     }
-    return { kind: 'parsed', statement: result.statement };
+
+    return {
+      kind: 'parsed',
+      statement: {
+        ...result.statement,
+        source,
+        ...(ocrConfidence === undefined ? {} : { ocrConfidence }),
+      },
+    };
   } catch (err) {
     return {
       kind: 'failed',

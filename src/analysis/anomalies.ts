@@ -43,8 +43,61 @@ export function detectAnomalies(input: AnomalyInput): Anomaly[] {
   const { statements, reconciliations, reversals, chain } = input;
   const found: Anomaly[] = [];
 
+  const byId = new Map(statements.map((s) => [s.id, s]));
+
   for (const rec of reconciliations) {
-    if (rec.passes) continue;
+    const statement = byId.get(rec.statementId);
+
+    if (rec.passes) {
+      /*
+       * An OCR reading that satisfies the invariant has passed a test it
+       * could not have passed by luck: a misread digit breaks
+       * opening + charges - payments = closing, and separately breaks the
+       * per-card subtotals. Two independent checksums agreeing is what makes
+       * the figures believable -- so say that, rather than leaving the reader
+       * to wonder how much to trust a scan.
+       */
+      if (statement?.source === 'ocr') {
+        const subtotalsAgree = (statement.cardSubtotals ?? []).every((c) => c.matches);
+        found.push({
+          id: `ocr-ok:${rec.statementId}`,
+          severity: 'info',
+          kind: 'ocr-verified',
+          title: `Read by OCR from an image, and the arithmetic checks out`,
+          detail:
+            `····${statement.accountMask} was a scan, so its figures were read off the page ` +
+            `by character recognition at ${Math.round(statement.ocrConfidence ?? 0)}% mean confidence. ` +
+            `They satisfy opening + charges - payments = closing exactly` +
+            (subtotalsAgree && (statement.cardSubtotals?.length ?? 0) > 0
+              ? `, and the per-card subtotals agree too`
+              : '') +
+            `. A misread digit would have broken that, so the figures can be relied on. ` +
+            `Descriptions are not checked by any sum and may still contain OCR errors.`,
+          reference: rec.statementId,
+        });
+      }
+      continue;
+    }
+
+    if (statement?.source === 'ocr') {
+      found.push({
+        id: `ocr-fail:${rec.statementId}`,
+        severity: 'critical',
+        kind: 'ocr-unverified',
+        title: 'A scanned statement was read, but its figures do not add up',
+        detail:
+          `····${statement.accountMask} was read by character recognition at ` +
+          `${Math.round(statement.ocrConfidence ?? 0)}% mean confidence, and the result fails ` +
+          `opening + charges - payments = closing by ${rec.delta.toFixed(2)}. That almost always ` +
+          `means a digit was misread rather than that the bank is wrong. These figures are not ` +
+          `trustworthy and are excluded from every total. A clearer scan, or the bank's own PDF, ` +
+          `would settle it.`,
+        reference: rec.statementId,
+        amount: rec.delta,
+      });
+      continue;
+    }
+
     found.push({
       id: `recon:${rec.statementId}`,
       severity: 'critical',
