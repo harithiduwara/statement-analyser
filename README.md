@@ -236,10 +236,20 @@ nothing else; after "Clear all data" it is empty.
   because none is sent — but "nobody knows I used it" is a different claim
   from "nobody sees my statements", and only the second one holds.
 - **You are trusting the deployed build.** The code here is auditable, but a
-  visitor cannot verify the served JavaScript matches it. Anyone who wants to
-  remove that assumption can clone the repo, run `npm run build`, and open
-  `dist/index.html` directly — it works offline, from `file://`, with no server
-  at all. Turning off the network first is a complete test of the claim.
+  visitor cannot verify that the served JavaScript matches it. Anyone who wants
+  to remove that assumption can run it from their own machine instead:
+
+  ```
+  git clone https://github.com/harithiduwara/statement-analyser
+  cd statement-analyser && npm install && npm run build
+  npx --yes serve dist        # or: python3 -m http.server -d dist
+  ```
+
+  Then disconnect from the internet and use it. Everything works — the audit
+  above found no off-origin request, so there is nothing for a connection to
+  carry. (Opening `dist/index.html` straight off disk does *not* work: browsers
+  block ES modules and stylesheets from a `file://` origin under CORS. It needs
+  a local static server, which is what the command above is.)
 - **Browser extensions can read any page**, including this one. Nothing a web
   page does can prevent that.
 - **A shared device.** Nothing is written about your statements, but they are
