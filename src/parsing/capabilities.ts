@@ -29,6 +29,15 @@ const CAPABILITIES: Capability[] = [
     present: () => typeof Object.hasOwn === 'function',
   },
   {
+    name: 'async iteration over a ReadableStream',
+    since: 'Chrome 124, Firefox 126; shimmed here for Safari, which lacks it',
+    present: () =>
+      typeof ReadableStream === 'function' &&
+      typeof (ReadableStream.prototype as unknown as Record<symbol, unknown>)[
+        Symbol.asyncIterator
+      ] === 'function',
+  },
+  {
     name: 'structuredClone',
     since: 'Safari 15.4, Chrome 98, Firefox 94',
     present: () => typeof structuredClone === 'function',

@@ -4,8 +4,9 @@
  * pdf.js's legacy build transpiles modern *syntax* but does not polyfill
  * modern *APIs*, and it calls two that are recent:
  *
- *   Promise.withResolvers   Safari 17.4 (March 2024) / Chrome 119 / Firefox 121
- *   Object.hasOwn           Safari 15.4 (March 2022)
+ *   Promise.withResolvers                    Safari 17.4 / Chrome 119 / Firefox 121
+ *   Object.hasOwn                            Safari 15.4
+ *   ReadableStream async iteration           not implemented in Safari at all
  *
  * On an iPhone a version or two behind, the first call throws before a single
  * page is read, and Safari reports it as "undefined is not a function", which
@@ -77,6 +78,67 @@
         }
         return undefined;
       },
+    });
+  }
+
+  /*
+   * Async iteration over a ReadableStream -- `for await (const chunk of stream)`.
+   *
+   * Chrome and Firefox have it; Safari does not implement it at all, at any
+   * version. pdf.js uses it in `getTextContent`, so on Safari every statement
+   * failed at the moment its text was read, and the browser reported it as
+   * "undefined is not a function" -- because the missing piece is the stream's
+   * `Symbol.asyncIterator` method, which is exactly what the loop tries to call.
+   *
+   * Implemented to the Streams spec (https://streams.spec.whatwg.org/#rs-asynciterator):
+   * the reader is acquired when the iterator is created, released when the
+   * stream ends, and cancelled on early exit unless `preventCancel` is set.
+   */
+  if (
+    typeof global.ReadableStream === 'function' &&
+    typeof Symbol === 'function' &&
+    typeof Symbol.asyncIterator === 'symbol' &&
+    typeof global.ReadableStream.prototype[Symbol.asyncIterator] !== 'function'
+  ) {
+    var streamValues = function values(options) {
+      var reader = this.getReader();
+      var preventCancel = Boolean(options && options.preventCancel);
+      var iterator = {
+        next: function () {
+          return reader.read().then(function (result) {
+            if (result.done) {
+              reader.releaseLock();
+              return { value: undefined, done: true };
+            }
+            return { value: result.value, done: false };
+          });
+        },
+        return: function (value) {
+          if (preventCancel) {
+            reader.releaseLock();
+            return Promise.resolve({ value: value, done: true });
+          }
+          return reader.cancel(value).then(function () {
+            reader.releaseLock();
+            return { value: value, done: true };
+          });
+        },
+      };
+      iterator[Symbol.asyncIterator] = function () {
+        return this;
+      };
+      return iterator;
+    };
+
+    Object.defineProperty(global.ReadableStream.prototype, 'values', {
+      writable: true,
+      configurable: true,
+      value: streamValues,
+    });
+    Object.defineProperty(global.ReadableStream.prototype, Symbol.asyncIterator, {
+      writable: true,
+      configurable: true,
+      value: streamValues,
     });
   }
 
