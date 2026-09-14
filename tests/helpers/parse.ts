@@ -2,6 +2,7 @@ import { makePdf, type PageSpec } from './makePdf';
 import { extractTextLayer } from '@/parsing/pdf';
 import { parseDocument, type ParseResult } from '@/parsing/parser';
 import '@/parsing/seylan';
+import '@/parsing/sampath';
 
 /** Render fixture pages to a PDF and run the full extract-and-parse pipeline. */
 export async function parsePages(pages: PageSpec[], fileName: string): Promise<ParseResult> {

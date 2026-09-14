@@ -41,7 +41,7 @@ export function UploadView({
       <Panel>
         <PanelHeader
           title="Add statements"
-          subtitle="Seylan PDFs are supported today. Sampath is next."
+          subtitle="Seylan and Sampath PDFs are supported, plus scanned images."
           aside={
             files.length > 0 ? (
               <Button variant="danger" size="sm" onClick={onClear}>

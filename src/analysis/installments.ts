@@ -185,11 +185,26 @@ function finalisePlan(
   const totalPayable = roundMoney(monthly * draft.termCount);
 
   const origination = findOrigination(draft, idsByIssuer, reversals);
-  const originalPrincipal = origination?.amount;
-  const costOfCredit =
-    originalPrincipal !== undefined && originalPrincipal > 0
-      ? totalPayable / originalPrincipal - 1
+  const rawPrincipal = origination?.amount;
+  const rawCost =
+    rawPrincipal !== undefined && rawPrincipal > 0
+      ? totalPayable / rawPrincipal - 1
       : undefined;
+
+  /*
+   * A negative cost of credit is impossible: financing never makes the total
+   * repaid less than the principal. When it comes out negative the matched
+   * origination does not belong to this schedule -- the usual cause is a plan
+   * the issuer splits across two instalment lines (so `monthly` captures only
+   * one part), or a fuzzy merchant match that picked a larger, unrelated
+   * origination. Either way the derived cost is not a fact, so the principal
+   * and cost are withheld rather than a nonsensical figure presented. A small
+   * negative from rounding is tolerated and clamped to zero.
+   */
+  const reliable = rawCost === undefined || rawCost >= -0.005;
+  const originalPrincipal = reliable ? rawPrincipal : undefined;
+  const costOfCredit =
+    rawCost === undefined ? undefined : reliable ? Math.max(0, rawCost) : undefined;
 
   const latestMonth = monthKey(draft.latestDate);
 

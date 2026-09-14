@@ -324,7 +324,7 @@ function Sidebar({
       </ul>
 
       <div className="p-3 text-[10.5px] leading-relaxed" style={{ color: 'var(--ink-muted)', borderTop: '1px solid var(--line)' }}>
-        Seylan parser live. Sampath next. No file leaves this tab.
+        Seylan and Sampath supported. No file leaves this tab.
       </div>
     </nav>
   );

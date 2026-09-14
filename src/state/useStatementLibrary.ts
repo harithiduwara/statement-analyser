@@ -7,6 +7,7 @@ import { reconcile } from '@/analysis/reconcile';
 import { explainFailure } from '@/parsing/capabilities';
 import type { Reconciliation } from '@/domain/types';
 import '@/parsing/seylan';
+import '@/parsing/sampath';
 
 /**
  * In-memory library of parsed statements.
