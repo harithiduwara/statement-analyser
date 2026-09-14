@@ -181,14 +181,28 @@ Three things in the UI are load-bearing rather than decorative:
 
 ## Browser support
 
-pdf.js calls `Promise.withResolvers` (Safari 17.4, March 2024) and
-`Object.hasOwn` (Safari 15.4). Its `legacy` build transpiles modern *syntax*
-but does not polyfill modern *APIs*, so on an iPhone a version or two behind,
-reading a statement failed before a single page was parsed — and Safari
-reports a missing API only as `undefined is not a function`, which sends the
-reader looking for a problem in their statement.
+pdf.js assumes three things Safari does not provide:
 
-`src/parsing/compat.js` shims both, plus `at`, `findLast` and `findLastIndex`.
+| What | Where it stands |
+|---|---|
+| `Promise.withResolvers` | Safari 17.4 (March 2024) |
+| `Object.hasOwn` | Safari 15.4 |
+| **async iteration over a `ReadableStream`** | **not implemented in Safari, at any version** |
+
+The third is the one that matters most: `getTextContent` does
+`for await (const chunk of stream)`, so on Safari *every* statement failed at
+the moment its text was read, on current iPhones as much as old ones. Safari
+reports all three the same way — `undefined is not a function` — which sends
+the reader looking for a problem in their statement. (For the stream case the
+missing piece is the stream's `Symbol.asyncIterator` method, which is
+precisely what the loop calls, hence the wording.)
+
+Its `legacy` build transpiles modern *syntax* but does not polyfill modern
+*APIs*, so it was never the protection it looked like.
+
+`src/parsing/compat.js` shims all three — the stream iterator to the Streams
+spec, acquiring the reader on creation and cancelling on early exit — plus
+`at`, `findLast` and `findLastIndex`.
 It is plain script source with no imports, because the same file is prepended
 verbatim to the pdf.js **worker** bundle at build time — a worker has its own
 global scope that a page-level polyfill never reaches, and the worker is where

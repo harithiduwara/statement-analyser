@@ -46,6 +46,49 @@ describe('compatibility shims', () => {
     expect(sample.findLastIndex((n) => n % 2 === 1)).toBe(2);
   });
 
+  it('installs async iteration over a ReadableStream', async () => {
+    // Safari does not implement this at any version, and pdf.js uses it in
+    // getTextContent -- so without the shim every statement fails the moment
+    // its text is read. Node has it natively, so the shim is exercised by
+    // removing it first, the same way the browser lacks it.
+    const proto = ReadableStream.prototype as unknown as Record<symbol | string, unknown>;
+    const native = proto[Symbol.asyncIterator];
+    try {
+      delete proto[Symbol.asyncIterator];
+      delete proto['values'];
+      const fresh = `${await import('node:url').then((u) => u.pathToFileURL(
+        new URL('../src/parsing/compat.js', import.meta.url).pathname).href)}?stream`;
+      await import(/* @vite-ignore */ fresh);
+      expect(typeof proto[Symbol.asyncIterator]).toBe('function');
+
+      const stream = new ReadableStream<number>({
+        start(c) {
+          c.enqueue(1);
+          c.enqueue(2);
+          c.close();
+        },
+      });
+      const seen: number[] = [];
+      for await (const chunk of stream) seen.push(chunk);
+      expect(seen).toEqual([1, 2]);
+
+      // Leaving the loop early must cancel and release without throwing.
+      const partial = new ReadableStream<string>({
+        start(c) {
+          c.enqueue('a');
+          c.enqueue('b');
+          c.close();
+        },
+      });
+      for await (const chunk of partial) {
+        expect(chunk).toBe('a');
+        break;
+      }
+    } finally {
+      proto[Symbol.asyncIterator] = native;
+    }
+  });
+
   it('is plain script source, so it can be prepended to the worker bundle', () => {
     // The Vite build prepends this file verbatim to the pdf.js worker, which
     // has its own global scope. Any import or export would break that.
@@ -53,5 +96,6 @@ describe('compatibility shims', () => {
     expect(source).not.toMatch(/^\s*(import|export)\s/m);
     expect(source).toMatch(/withResolvers/);
     expect(source).toMatch(/hasOwn/);
+    expect(source).toMatch(/asyncIterator/);
   });
 });
