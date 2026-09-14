@@ -48,6 +48,9 @@ export interface StatementSpec {
   transactions: Txn[];
   /** Override the printed closing balance, to model a broken cycle. */
   closingOverride?: number;
+  /** Model a statement that was read off a scan rather than a text layer. */
+  source?: 'text' | 'ocr';
+  ocrConfidence?: number;
 }
 
 /**
@@ -81,6 +84,8 @@ export function statement(spec: StatementSpec): Statement {
     minimumPayment: roundMoney(closing * 0.05),
     transactions: spec.transactions,
     sourceFileName: `${issuer}-${spec.date}.pdf`,
+    source: spec.source ?? 'text',
+    ...(spec.ocrConfidence === undefined ? {} : { ocrConfidence: spec.ocrConfidence }),
     warnings: [],
   };
 }

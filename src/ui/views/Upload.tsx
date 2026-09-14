@@ -170,6 +170,8 @@ function statusChip(file: FileState) {
   switch (file.kind) {
     case 'parsing':
       return <Chip>reading</Chip>;
+    case 'ocr':
+      return <Chip tone="accent">reading image</Chip>;
     case 'ok':
       return file.reconciliation.passes ? (
         <Chip tone="good">reconciles</Chip>
@@ -189,12 +191,21 @@ function detail(file: FileState): string {
   switch (file.kind) {
     case 'parsing':
       return 'Extracting the text layer…';
+    case 'ocr':
+      return (
+        `This statement is an image, so it is being read by character recognition — ` +
+        `page ${file.page} of ${file.pageCount}, ${file.status} ` +
+        `${Math.round(file.progress * 100)}%. It stays on this device; the recogniser runs here.`
+      );
     case 'ok': {
       const s = file.statement;
       const warnings = s.warnings.filter((w) => w.level !== 'info').length;
       return (
         `${s.issuer} ····${s.accountMask} · ${formatDate(s.statementDate)} · ` +
         `${s.transactions.length} transactions · closing ${formatMoney(s.closingBalance)}` +
+        (s.source === 'ocr'
+          ? ` · read by OCR at ${Math.round(s.ocrConfidence ?? 0)}% confidence`
+          : '') +
         (warnings > 0 ? ` · ${warnings} warning${warnings === 1 ? '' : 's'}` : '')
       );
     }

@@ -27,6 +27,11 @@ export interface PageLayer {
   width: number;
   height: number;
   items: TextItem[];
+  /**
+   * How the items were obtained. OCR boxes are far noisier vertically than
+   * PDF text positions, so rows are grouped differently -- see `buildLines`.
+   */
+  source?: 'text' | 'ocr';
 }
 
 export interface DocumentLayer {
@@ -59,14 +64,43 @@ function isMeaningful(item: TextItem): boolean {
 }
 
 /**
- * Group a page's items into rows by baseline, then order each row left to
- * right. Tolerance is adaptive: statements mix font sizes, and a fixed
- * tolerance either splits a row of mixed sizes or merges two tight rows.
+ * Group a page's items into rows, then order each row left to right.
+ *
+ * Two strategies, because the two sources of items behave differently.
+ *
+ * A PDF places every glyph on an exact baseline, so items on a row share a y
+ * to within a rounding error and proximity grouping is both correct and
+ * cheap. OCR reports a box drawn around the ink it found, whose bottom edge
+ * moves with whatever the word happens to contain -- a descender, a comma, a
+ * stray speck -- so on a single printed row the boxes can differ by several
+ * points. Grouping those by baseline proximity tears rows apart: the amount
+ * ends up on a line of its own, separated from the description it belongs to,
+ * and the row silently stops being a transaction.
+ *
+ * So OCR rows are grouped by vertical overlap instead: two boxes belong to
+ * the same row when they overlap by more than half the shorter one's height,
+ * which is true of words printed side by side and false of words printed on
+ * consecutive lines, regardless of what letters they contain.
  */
 export function buildLines(page: PageLayer, yTolerance = DEFAULT_Y_TOLERANCE): Line[] {
   const items = page.items.filter(isMeaningful);
   if (items.length === 0) return [];
 
+  const rows =
+    page.source === 'ocr' ? groupByOverlap(items) : groupByBaseline(items, yTolerance);
+
+  return rows.map((row) => {
+    const ordered = [...row].sort((a, b) => a.x - b.x);
+    return {
+      pageNumber: page.pageNumber,
+      y: ordered.reduce((acc, i) => acc + i.y, 0) / ordered.length,
+      items: ordered,
+      text: joinItems(ordered),
+    };
+  });
+}
+
+function groupByBaseline(items: readonly TextItem[], yTolerance: number): TextItem[][] {
   // Top-down: PDF y grows upward, statements read downward.
   const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
 
@@ -86,16 +120,48 @@ export function buildLines(page: PageLayer, yTolerance = DEFAULT_Y_TOLERANCE): L
     }
   }
   if (current.length > 0) rows.push(current);
+  return rows;
+}
 
-  return rows.map((row) => {
-    const ordered = [...row].sort((a, b) => a.x - b.x);
-    return {
-      pageNumber: page.pageNumber,
-      y: ordered.reduce((acc, i) => acc + i.y, 0) / ordered.length,
-      items: ordered,
-      text: joinItems(ordered),
-    };
-  });
+/** Fraction of the shorter box that must overlap for two words to share a row. */
+const OVERLAP_RATIO = 0.5;
+
+function groupByOverlap(items: readonly TextItem[]): TextItem[][] {
+  const sorted = [...items].sort((a, b) => b.y + b.height - (a.y + a.height) || a.x - b.x);
+
+  const rows: TextItem[][] = [];
+  let current: TextItem[] = [];
+  // The row's extent grows as words join it, so a tall word and a short one
+  // on the same printed line still meet.
+  let top = 0;
+  let bottom = 0;
+
+  for (const item of sorted) {
+    const itemTop = item.y + item.height;
+    const itemBottom = item.y;
+
+    if (current.length === 0) {
+      current = [item];
+      top = itemTop;
+      bottom = itemBottom;
+      continue;
+    }
+
+    const overlap = Math.min(top, itemTop) - Math.max(bottom, itemBottom);
+    const shorter = Math.min(top - bottom, item.height);
+    if (shorter > 0 && overlap >= shorter * OVERLAP_RATIO) {
+      current.push(item);
+      top = Math.max(top, itemTop);
+      bottom = Math.min(bottom, itemBottom);
+    } else {
+      rows.push(current);
+      current = [item];
+      top = itemTop;
+      bottom = itemBottom;
+    }
+  }
+  if (current.length > 0) rows.push(current);
+  return rows;
 }
 
 /** Join a row's items, materialising horizontal gaps as spaces. */
