@@ -201,13 +201,49 @@ path, rather than as the browser's own wording.
 
 ## Privacy properties, and how they are enforced
 
-- **Masking happens at extraction.** `maskCardNumber` is called on the header
-  match and the full value is discarded in the same expression. A test asserts
-  that no run of 8+ digits survives into the serialised statement.
-- **No network from the PDF layer.** `getDocument` is given local bytes with
-  `useWorkerFetch: false` and no CMap or standard-font URL configured, so
-  pdf.js has nothing to fetch.
-- **No third-party script** in `index.html`.
+The claim is that a statement never leaves the browser. It is worth being
+precise about what that does and does not cover.
+
+**Enforced in code, and asserted in `tests/privacy.test.ts`:**
+
+- **No outbound request.** No `fetch`, `XMLHttpRequest`, `WebSocket`,
+  `EventSource` or `sendBeacon` anywhere in the source. The app has no
+  endpoint to send a statement to, because there is no server.
+- **No third-party anything.** No analytics, no tag manager, no remote fonts,
+  no CDN script. `index.html` loads one local module and an inline `data:`
+  favicon, so the page makes no request even for its icon.
+- **The PDF reader cannot fetch.** `getDocument` is handed local bytes with
+  `useWorkerFetch: false` and no CMap or standard-font URL configured.
+- **Masking happens at extraction.** `maskCardNumber` runs on the header match
+  and the full value is discarded in the same expression; a test asserts no run
+  of 8+ digits survives into a parsed statement.
+- **Only preferences are persisted.** The two `localStorage` writers are the
+  theme and the category rules, and a test asserts neither can reach a
+  `Statement` or a `Txn`. Statements are held in memory and are gone on reload.
+- **"Clear all data" leaves nothing**: statements, your rules, dismissed
+  findings and the theme choice, all removed.
+
+**Verified in a browser, on the production build:** a full session — load,
+parse a statement, visit all seven routes, add a rule, export the CSV — makes
+**7 requests, all same-origin, all GET**: the page and its assets. Zero
+off-origin. `localStorage` afterwards holds the theme and the rules and
+nothing else; after "Clear all data" it is empty.
+
+**What this does not cover, stated plainly:**
+
+- **The host sees that you visited.** GitHub Pages serves the files, so GitHub
+  receives your IP and user-agent like any website. It never sees a statement,
+  because none is sent — but "nobody knows I used it" is a different claim
+  from "nobody sees my statements", and only the second one holds.
+- **You are trusting the deployed build.** The code here is auditable, but a
+  visitor cannot verify the served JavaScript matches it. Anyone who wants to
+  remove that assumption can clone the repo, run `npm run build`, and open
+  `dist/index.html` directly — it works offline, from `file://`, with no server
+  at all. Turning off the network first is a complete test of the claim.
+- **Browser extensions can read any page**, including this one. Nothing a web
+  page does can prevent that.
+- **A shared device.** Nothing is written about your statements, but they are
+  on screen until the tab is closed.
 
 ## Assumptions in the Seylan adapter
 

@@ -33,6 +33,19 @@ export function applyTheme(choice: ThemeChoice): void {
   }
 }
 
+/**
+ * Forget the stored theme choice and fall back to the system setting.
+ * Called by "Clear all data" so the control leaves nothing of this app behind.
+ */
+export function clearTheme(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Nothing stored to clear.
+  }
+  document.documentElement.removeAttribute('data-theme');
+}
+
 /** Whether dark styles are currently in effect, for chart colour lookups. */
 export function isDarkActive(): boolean {
   const stamped = document.documentElement.getAttribute('data-theme');

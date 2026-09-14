@@ -17,7 +17,7 @@ import { useCategoryRules } from '@/state/useCategoryRules';
 import { buildPortfolio } from '@/analysis/portfolio';
 import { formatMoney } from '@/lib/money';
 import { href, useRoute, type Route } from './router';
-import { applyTheme, readTheme, type ThemeChoice } from './theme';
+import { applyTheme, clearTheme, readTheme, type ThemeChoice } from './theme';
 import { Chip } from './primitives';
 import { cn } from './lib';
 import { UploadView } from './views/Upload';
@@ -67,10 +67,17 @@ export function App() {
   const portfolio = useMemo(() => buildPortfolio(statements), [statements]);
   const openAnomalies = portfolio.anomalies.filter((a) => !dismissed.has(a.id)).length;
 
+  /**
+   * Leave nothing of this app behind: the loaded statements, the rules the
+   * reader wrote, the dismissed findings, and the theme choice. A control
+   * called "Clear all data" should not quietly keep some.
+   */
   const clearEverything = (): void => {
     clearAll();
     clearStored();
     setDismissed(new Set());
+    clearTheme();
+    setTheme('system');
   };
 
   const meta = TITLES[route];
