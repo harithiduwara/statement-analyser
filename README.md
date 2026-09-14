@@ -43,24 +43,94 @@ page issues **no off-origin requests at all**, before or during a parse.
 
 ## How it is put together
 
-```
-src/domain/types.ts      the domain model and the money sign convention
-src/lib/money.ts         amount parsing, including the CR-suffix rule
-src/lib/mask.ts          card masking, applied at the point of extraction
-src/lib/dates.ts         day-first date parsing, no assumed cycle day
-src/parsing/pdf.ts       the only pdf.js dependency in the codebase
-src/parsing/textLayer.ts positioned text items -> rows -> gap-aware strings
-src/parsing/headerGrid.ts label/value grids read by column
-src/parsing/classify.ts  transaction classification rules
-src/parsing/rewards.ts   the rewards identity solver
-src/parsing/parser.ts    StatementParser interface + issuer registry
-src/parsing/seylan/      the Seylan adapter
-src/analysis/reconcile.ts  opening + charges - payments = closing
+```mermaid
+flowchart TD
+    PDF["PDF file"]
+    EX["extractTextLayer<br/>the one place<br/>pdf.js is used"]
+    DL[/"DocumentLayer<br/>positioned items"/]
+    TL["buildLines<br/>baseline rows,<br/>columns by x"]
+    REG["detectParser"]
+    NONE["unidentified,<br/>runner-up scores"]
+    ST[/"Statement<br/>accountMask only"/]
+    REC["reconcile<br/>opening + charges<br/>- payments<br/>= closing"]
+    PASS["UI, analytics,<br/>Excel export"]
+    FAIL["surfaced loudly,<br/>cause of the<br/>delta named"]
+
+    subgraph ADAPTER ["one adapter per issuer - seylan/, next sampath/"]
+        direction LR
+        HG["headerGrid"] ~~~ TX["readTransactions"] ~~~ CL["classify"] ~~~ RW["rewards"]
+    end
+
+    PDF --> EX --> DL --> TL --> REG
+    REG -->|"best match"| ADAPTER
+    REG -->|"no match"| NONE
+    ADAPTER --> ST --> REC
+    REC -->|"passes"| PASS
+    REC -->|"fails"| FAIL
+
+    classDef data stroke:#0284c7,stroke-width:2px
+    classDef gate stroke:#dc2626,stroke-width:2px
+    class DL,ST data
+    class REC gate
+    style ADAPTER fill:none,stroke:#94a3b8,stroke-dasharray:4 3
 ```
 
-Parsers never touch pdf.js. They work on a `DocumentLayer` of positioned text
-items, which is what makes them testable and what keeps column alignment —
-the thing statement layouts actually encode — from being flattened away.
+**There is no server in that diagram because there is no server.** Every box
+runs inside the visitor's browser tab. The PDF bytes come from a local `File`
+and go to a worker on the same machine; nothing is uploaded, and the app has
+no endpoint to upload to.
+
+Two boundaries in the diagram are doing real work:
+
+- **`DocumentLayer` is where pdf.js stops.** No parser imports it, which is
+  what makes adapters testable from a recorded layer and what stops a pdf.js
+  upgrade from rippling into parsing logic.
+- **`Statement` is where the card number is already gone.** Masking happens
+  during the header read, not before display, so no later mistake can leak a
+  number that was never kept.
+
+### Why positions and not page text
+
+A statement's meaning is carried by its columns. Flattening the page to a
+string throws that away, and the amount column is exactly where it hurts:
+
+```
+x =  40        92        148                               470      548 ┤right
+     │         │         │                                 │           │
+     06/03/26  05/03/26  075233 NETFLIX.COM SINGAPORE      LKR   4,390.50
+     └ posted ┘└─ txn ──┘└ ref ─┘└──── description ───────┘ └curr┘└ amount ┘
+
+     USD   14.99     ← continuation line, attached to the row above;
+                       implied rate derived as 4,390.50 / 14.99 = 292.90
+```
+
+The amount is read from the **rightmost** token on the row, not by a regex over
+the line, so a description that happens to end in something amount-shaped
+cannot be mistaken for the amount. A bare `CR` extracted as its own token is
+folded back onto the number beside it — which is how a credit keeps its sign.
+
+The same reasoning drives `headerGrid`: a label and its value are paired by
+column position, so a blank cell shifts nothing, and `FINANCE CHARGE` appearing
+as both a header field and a transaction description cannot cross-contaminate.
+
+### Module map
+
+```
+src/domain/types.ts        the domain model and the money sign convention
+src/lib/money.ts           amount parsing, including the CR-suffix rule
+src/lib/mask.ts            card masking, applied at the point of extraction
+src/lib/dates.ts           day-first date parsing, no assumed cycle day
+src/parsing/pdf.ts         the only pdf.js dependency in the codebase
+src/parsing/textLayer.ts   positioned text items -> rows -> gap-aware strings
+src/parsing/headerGrid.ts  label/value grids read by column
+src/parsing/classify.ts    transaction classification rules
+src/parsing/rewards.ts     the rewards identity solver
+src/parsing/parser.ts      StatementParser interface + issuer registry
+src/parsing/seylan/        the Seylan adapter
+src/analysis/reconcile.ts  opening + charges - payments = closing
+src/state/                 in-memory statement library, duplicate detection
+src/ui/                    upload panel and statement view
+```
 
 Adding a third issuer is a new file implementing `StatementParser` plus one
 `registerParser` call. Nothing else changes.
