@@ -102,11 +102,11 @@ string throws that away, and the amount column is exactly where it hurts:
 ```
 x =  40        92        148                               470      548 ┤right
      │         │         │                                 │           │
-     06/03/26  05/03/26  075233 EXAMPLE CLOUD IRELAND      LKR   4,390.50
+     06/03/26  05/03/26  100200 EXAMPLE CLOUD IRELAND      LKR   3,000.00
      └ posted ┘└─ txn ──┘└ ref ─┘└──── description ───────┘ └curr┘└ amount ┘
 
-     USD   14.99     ← continuation line, attached to the row above;
-                       implied rate derived as 4,390.50 / 14.99 = 292.90
+     USD   10.00     ← continuation line, attached to the row above;
+                       implied rate derived as 3,000.00 / 10.00 = 300.00
 ```
 
 The amount is read from the **rightmost** token on the row, not by a regex over
@@ -395,8 +395,8 @@ What the real layout settled:
   are found by their own shape (account + dates + amounts), because pairing a
   label row with the next line would catch the mojibake row between them.
 - **A credit opening balance** prints `10,000.00CR` when the account was
-  overpaid, and parses to a negative opening. (One of the sample cycles opened
-  12,500.00 in credit; without this it failed to reconcile.)
+  overpaid, and parses to a negative opening. (An account that opened, say,
+  12,500.00 in credit would fail to reconcile without this.)
 - **The recurring processing-fee line carries no `n/m`**, so it inherits the
   plan of the instalment repayment it follows -- otherwise the fee is not
   folded into the plan's monthly cost.
@@ -420,15 +420,15 @@ An instalment purchase is not one line. The issuer posts the purchase at full
 value, reverses it the next day, and re-books it as a schedule:
 
 ```
-15/03  ACME - GALLE                        200,000.00     origination
-16/03  ACME - GALLE                        200,000.00CR   reversal
-16/03  ACME INSTALLMENT REPAYMENT 1/36         6,000.00     first instalment
-16/03  ACME INSTALLMENT PROCESSING FEES        500.00     recurring fee
+15/03  ACME - GALLE                      120,000.00     origination
+16/03  ACME - GALLE                      120,000.00CR   reversal
+16/03  ACME INSTALLMENT REPAYMENT 1/36    10,000.00     first instalment
+16/03  ACME INSTALLMENT PROCESSING FEES      500.00     recurring fee
 ```
 
 Summing gross debits counts that purchase twice — once at full value and again
 as its schedule. Treating the credit as a payment says the cardholder settled
-200,000 they never paid. So `ReversalMatcher` pairs each origination with its
+120,000 they never paid. So `ReversalMatcher` pairs each origination with its
 reversal on amount, a short date window and a fuzzy merchant match, and
 `trueCharges = grossDebits − matchedReversals`. Every credit is then either a
 payment or a reversal, decided line by line.

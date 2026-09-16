@@ -17,8 +17,8 @@ const PAN_RE = /\b(?:\d[\s*x-]?){12,22}\d\b/gi;
 
 /**
  * Reduce a printed card/account number to its last four digits.
- * `44440000****1234` -> `2470`
- * `4444 0000 XXXX 1234` -> `2470`
+ * `44440000****1234` -> `1234`
+ * `4444 0000 XXXX 1234` -> `1234`
  * Returns `undefined` when fewer than four digits are present.
  */
 export function maskCardNumber(input: string | undefined | null): string | undefined {
@@ -28,7 +28,7 @@ export function maskCardNumber(input: string | undefined | null): string | undef
   return digits.slice(-4);
 }
 
-/** Display form for a mask: `2470` -> `•••• 2470`. */
+/** Display form for a mask: `1234` -> `•••• 1234`. */
 export function formatMask(mask: string): string {
   return `•••• ${mask}`;
 }

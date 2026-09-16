@@ -51,11 +51,11 @@ describe('reversal matching', () => {
 
   it('removes the reversal from charges instead of counting it as a payment', () => {
     // Gross debits count the purchase and its schedule; true charges do not.
-    expect(analysis.grossDebits).toBe(226_230.96);
+    expect(analysis.grossDebits).toBe(218_500);
     expect(analysis.matchedReversals).toBe(200_000);
-    expect(analysis.trueCharges).toBe(19_399.96);
+    expect(analysis.trueCharges).toBe(18_500);
     // The 200,000 credit is a reversal; only the 50,000 is a real payment.
-    expect(analysis.grossCredits).toBe(256_831);
+    expect(analysis.grossCredits).toBe(250_000);
     expect(analysis.payments).toBe(50_000);
   });
 
@@ -89,8 +89,8 @@ describe('instalment register', () => {
     const plan = register.plans[0]!;
     expect(plan.monthlyRepayment).toBe(6_000);
     expect(plan.monthlyFee).toBe(500);
-    expect(plan.monthly).toBe(7_399.96);
-    expect(register.monthlyObligation).toBe(7_399.96);
+    expect(plan.monthly).toBe(6_500);
+    expect(register.monthlyObligation).toBe(6_500);
   });
 
   it('tracks progress and remaining value', () => {
@@ -98,15 +98,15 @@ describe('instalment register', () => {
     expect(plan.termCount).toBe(36);
     expect(plan.latestInstallment).toBe(1);
     expect(plan.remaining).toBe(35);
-    expect(plan.remainingValue).toBe(258_998.6);
-    expect(plan.totalPayable).toBe(266_398.56);
+    expect(plan.remainingValue).toBe(227_500);
+    expect(plan.totalPayable).toBe(234_000);
   });
 
   it('prices the plan from the observed origination', () => {
     const plan = register.plans[0]!;
     expect(plan.originalPrincipal).toBe(200_000);
-    expect(plan.costOfCredit).toBeCloseTo(266_398.56 / 200_000 - 1, 9);
-    expect(plan.financingCost).toBe(59_567.56);
+    expect(plan.costOfCredit).toBeCloseTo(234_000 / 200_000 - 1, 9);
+    expect(plan.financingCost).toBe(34_000);
   });
 
   it('reports n/a rather than inferring a principal that was never observed', () => {
@@ -154,7 +154,7 @@ describe('instalment register', () => {
   it('does not double-count a cycle that appears twice', () => {
     const twice = buildInstallmentRegister([cycle, cycle], reversals);
     expect(twice.plans).toHaveLength(1);
-    expect(twice.monthlyObligation).toBe(7_399.96);
+    expect(twice.monthlyObligation).toBe(6_500);
   });
 });
 
@@ -166,9 +166,9 @@ describe('forward schedule', () => {
   it('projects each plan for exactly its remaining months', () => {
     expect(schedule.months).toHaveLength(35);
     expect(schedule.months[0]!.month).toBe('2026-05');
-    expect(schedule.months[0]!.total).toBe(7_399.96);
-    expect(schedule.months[34]!.total).toBe(7_399.96);
-    expect(schedule.totalOutflow).toBe(258_998.6);
+    expect(schedule.months[0]!.total).toBe(6_500);
+    expect(schedule.months[34]!.total).toBe(6_500);
+    expect(schedule.totalOutflow).toBe(227_500);
   });
 
   it('marks the month a plan retires', () => {
@@ -252,12 +252,12 @@ describe('spend views', () => {
     const b = breakdownByCategory([cycle], rules, reversals, register, 'economic');
     // 200,000 origination + 12,000 groceries. The repayment and its fee are
     // the same purchase arriving in instalments, so they are not added again.
-    expect(b.grandTotal).toBe(218_831);
+    expect(b.grandTotal).toBe(212_000);
   });
 
   it('counts the repayments and not the origination on the cash view', () => {
     const b = breakdownByCategory([cycle], rules, reversals, register, 'cash');
-    expect(b.grandTotal).toBe(19_399.96);
+    expect(b.grandTotal).toBe(18_500);
   });
 
   it('counts a reversed charge that was never financed on neither view', () => {
@@ -285,7 +285,7 @@ describe('portfolio', () => {
     const p = buildPortfolio([cycle]);
     expect(p.statementBalance).toBe(cycle.closingBalance);
     expect(p.trueObligation).toBe(
-      Math.round((cycle.closingBalance + 258_998.6) * 100) / 100,
+      Math.round((cycle.closingBalance + 227_500) * 100) / 100,
     );
     expect(p.reconciliationSummary.passed).toBe(1);
   });
@@ -301,10 +301,10 @@ describe('portfolio', () => {
 
   it('averages spend and instalments over one cycle, reversed origination excluded', () => {
     // The reversed 200,000 origination must not count as spend; only the
-    // 6,000.00 + 500.00 schedule and the 12,000 everyday purchase do.
+    // 6,000 + 500 schedule and the 12,000 everyday purchase do.
     const p = buildPortfolio([acmeCycle('2026-04-06', 100_000)]);
-    expect(p.monthlyAverageSpend).toBe(19_399.96);
-    expect(p.monthlyAverageInstallment).toBe(7_399.96);
+    expect(p.monthlyAverageSpend).toBe(18_500);
+    expect(p.monthlyAverageInstallment).toBe(6_500);
     // The instalment slice can never exceed total spend.
     expect(p.monthlyAverageInstallment).toBeLessThanOrEqual(p.monthlyAverageSpend);
   });

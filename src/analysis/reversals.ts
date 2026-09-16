@@ -10,10 +10,10 @@ import { merchantSimilarity, MERCHANT_MATCH_THRESHOLD } from './merchant';
  * purchase at full value, reverses it the next day, and re-books it as a
  * schedule:
  *
- *   15/03  ACME - GALLE                        200,000.00   origination
- *   16/03  ACME - GALLE                        200,000.00CR reversal
- *   16/03  ACME INSTALLMENT REPAYMENT 1/36         6,000.00   first instalment
- *   16/03  ACME INSTALLMENT PROCESSING FEES        500.00   recurring fee
+ *   15/03  ACME - GALLE                      120,000.00     origination
+ *   16/03  ACME - GALLE                      120,000.00CR   reversal
+ *   16/03  ACME INSTALLMENT REPAYMENT 1/36    10,000.00     first instalment
+ *   16/03  ACME INSTALLMENT PROCESSING FEES      500.00     recurring fee
  *
  * Counting gross debits therefore counts the purchase twice over -- once at
  * full value and again as the schedule -- while counting gross credits treats

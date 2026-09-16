@@ -84,9 +84,9 @@ describe('Seylan adapter', () => {
 
   it('attaches the foreign-currency leg and derives the implied rate', async () => {
     const s = await parsePagesOrThrow(seylanStatementPages(), FILE);
-    const netflix = s.transactions.find((t) => t.description.includes('EXAMPLE CLOUD'));
-    expect(netflix?.amount).toBe(4_390.5);
-    expect(netflix?.currency).toEqual({
+    const foreign = s.transactions.find((t) => t.description.includes('EXAMPLE CLOUD'));
+    expect(foreign?.amount).toBe(4_390.5);
+    expect(foreign?.currency).toEqual({
       code: 'USD',
       amount: 14.99,
       impliedRate: 292.9,
