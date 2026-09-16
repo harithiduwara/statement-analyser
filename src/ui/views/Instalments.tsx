@@ -77,7 +77,7 @@ export function InstalmentsView({ portfolio }: { portfolio: Portfolio }) {
           <table className="grid-table">
             <thead>
               <tr>
-                <SortHeader label="Merchant" k="merchant" sort={sort} onSort={setSort} />
+                <SortHeader label="Merchant" k="merchant" sort={sort} onSort={setSort} descending={false} />
                 <th>Issuer</th>
                 <th className="right">Progress</th>
                 <SortHeader label="Monthly" k="monthly" sort={sort} onSort={setSort} right />
@@ -193,24 +193,30 @@ function SortHeader({
   sort,
   onSort,
   right,
+  descending = true,
 }: {
   label: string;
   k: SortKey;
   sort: SortKey;
   onSort: (k: SortKey) => void;
   right?: boolean;
+  descending?: boolean;
 }) {
   const active = sort === k;
   return (
-    <th className={right ? 'right' : ''}>
+    <th
+      className={right ? 'right' : ''}
+      aria-sort={active ? (descending ? 'descending' : 'ascending') : 'none'}
+    >
       <button
         type="button"
         onClick={() => onSort(k)}
+        aria-label={`Sort by ${label}`}
         className="inline-flex items-center gap-1 uppercase tracking-[0.06em]"
         style={{ color: active ? 'var(--accent)' : 'inherit', font: 'inherit' }}
       >
         {label}
-        <span aria-hidden style={{ opacity: active ? 1 : 0.3 }}>↓</span>
+        <span aria-hidden style={{ opacity: active ? 1 : 0.3 }}>{descending ? '↓' : '↑'}</span>
       </button>
     </th>
   );

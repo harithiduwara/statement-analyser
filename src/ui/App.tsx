@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -71,6 +71,48 @@ export function App() {
   const portfolio = useMemo(() => buildPortfolio(statements), [statements]);
   const openAnomalies = portfolio.anomalies.filter((a) => !dismissed.has(a.id)).length;
 
+  const mainRef = useRef<HTMLElement>(null);
+  const firstRender = useRef(true);
+
+  /*
+   * Orientation after a section change: move focus into the new content and
+   * reset the scroll, so a keyboard or screen-reader user lands at the top of
+   * what they navigated to rather than wherever the previous view left them.
+   * Skipped on first paint so the app never steals focus from the document on
+   * load.
+   */
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    mainRef.current?.focus();
+    window.scrollTo({ top: 0, left: 0 });
+  }, [route]);
+
+  /*
+   * Expert path: a digit jumps straight to the matching section, the way a
+   * keyboard-first reader expects. Guarded so it never fires while a field is
+   * focused or a modifier is held, and it honours the same "upload first" gate
+   * the navigation itself uses.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > NAV.length) return;
+      const target = NAV[n - 1]!;
+      if (portfolio.isEmpty && target.route !== 'upload') return;
+      e.preventDefault();
+      navigate(target.route);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navigate, portfolio.isEmpty]);
+
   /**
    * Leave nothing of this app behind: the loaded statements, the rules the
    * reader wrote, the dismissed findings, and the theme choice. A control
@@ -88,6 +130,20 @@ export function App() {
 
   return (
     <div className="flex min-h-screen">
+      <a
+        href="#main"
+        onClick={(e) => {
+          // Hash routing owns the URL fragment, so a real #main jump would be
+          // read as an unknown route and bounce to Upload. Focus the landmark
+          // directly instead of letting the fragment change.
+          e.preventDefault();
+          mainRef.current?.focus();
+        }}
+        className="sr-only rounded-md font-medium focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:px-3 focus:py-2 focus:text-[12px]"
+        style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+      >
+        Skip to content
+      </a>
       <Sidebar
         route={route}
         navigate={navigate}
@@ -126,7 +182,11 @@ export function App() {
                   true obligation {formatMoney(portfolio.trueObligation)}
                 </Chip>
                 {openAnomalies > 0 ? (
-                  <button type="button" onClick={() => navigate('overview')}>
+                  <button
+                    type="button"
+                    onClick={() => navigate('overview')}
+                    aria-label={`${openAnomalies} finding${openAnomalies === 1 ? '' : 's'} to review`}
+                  >
                     <Chip tone="serious">
                       <AlertTriangle size={11} aria-hidden /> {openAnomalies} to review
                     </Chip>
@@ -140,7 +200,14 @@ export function App() {
 
         <MobileNav route={route} navigate={navigate} disabled={portfolio.isEmpty} />
 
-        <main className="min-w-0 flex-1 px-4 py-4 sm:px-5 sm:py-5">
+        <main
+          ref={mainRef}
+          id="main"
+          tabIndex={-1}
+          aria-label={meta.title}
+          className="min-w-0 flex-1 px-4 py-4 sm:px-5 sm:py-5"
+          style={{ outline: 'none' }}
+        >
           <BrowserWarning />
           {route === 'upload' ? (
             <UploadView files={files} busy={busy} onAdd={addFiles} onClear={clearEverything} />
@@ -198,7 +265,7 @@ function MobileNav({
       style={{ background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}
       aria-label="Sections"
     >
-      {NAV.map((item) => {
+      {NAV.map((item, i) => {
         const active = route === item.route;
         const off = disabled && item.route !== 'upload';
         const Icon = item.icon;
@@ -211,6 +278,7 @@ function MobileNav({
               navigate(item.route);
             }}
             aria-current={active ? 'page' : undefined}
+            aria-keyshortcuts={String(i + 1)}
             className={cn(
               'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium whitespace-nowrap',
               off && 'opacity-45',
@@ -282,7 +350,7 @@ function Sidebar({
       </div>
 
       <ul className="flex-1 space-y-0.5 p-2">
-        {NAV.map((item) => {
+        {NAV.map((item, i) => {
           const active = route === item.route;
           const count = counts[item.route];
           const disabled = portfolioEmpty && item.route !== 'upload';
@@ -296,6 +364,8 @@ function Sidebar({
                   navigate(item.route);
                 }}
                 aria-current={active ? 'page' : undefined}
+                aria-keyshortcuts={String(i + 1)}
+                title={`${item.description} · press ${i + 1}`}
                 className={cn(
                   'flex items-start gap-2.5 rounded-md px-2.5 py-2 transition-colors',
                   disabled && 'opacity-45',
@@ -331,6 +401,7 @@ function Sidebar({
 
       <div className="p-3 text-[10.5px] leading-relaxed" style={{ color: 'var(--ink-muted)', borderTop: '1px solid var(--line)' }}>
         Seylan and Sampath supported. No file leaves this tab.
+        <span className="mt-1 block">Press 1–{NAV.length} to jump between sections.</span>
       </div>
     </nav>
   );

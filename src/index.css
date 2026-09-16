@@ -181,3 +181,20 @@
     text-align: right;
   }
 }
+
+/*
+ * Honour a reader who has asked their system to reduce motion: neutralise the
+ * colour transitions and any animation rather than override the preference.
+ * A global rule so it reaches Recharts and third-party markup too, not only
+ * the classes in this file.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

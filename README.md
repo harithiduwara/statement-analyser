@@ -227,6 +227,22 @@ Three things in the UI are load-bearing rather than decorative:
   two charts rather than two y-scales on one.
 - **Charts do not animate.** A dense analytical view is read, not watched.
 
+### Accessibility and keyboard
+
+Interaction is built to the same standard as the numbers:
+
+- **Every section has a keyboard path.** A skip link jumps past the navigation
+  to the content; on a section change focus moves into the new view and the
+  scroll resets, so a keyboard or screen-reader user is never left where the
+  previous view happened to be. Pressing `1`–`8` jumps straight to a section.
+- **The interface narrates itself.** The active section carries `aria-current`,
+  sortable columns expose `aria-sort` in the direction they actually sort, and
+  the upload view announces its parse outcome through a polite live region
+  rather than only changing on screen.
+- **Colour never carries meaning alone** — a status chip always pairs its hue
+  with a dot and a word — and a reader who has asked their system to reduce
+  motion gets no transitions.
+
 ## Browser support
 
 pdf.js assumes three things Safari does not provide:
@@ -288,7 +304,7 @@ precise about what that does and does not cover.
   findings and the theme choice, all removed.
 
 **Verified in a browser, on the production build:** a full session — load,
-parse a statement, visit all seven routes, add a rule, export the CSV — makes
+parse a statement, visit all eight routes, add a rule, export the CSV — makes
 **7 requests, all same-origin, all GET**: the page and its assets. Zero
 off-origin. `localStorage` afterwards holds the theme and the rules and
 nothing else; after "Clear all data" it is empty.

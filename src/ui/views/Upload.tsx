@@ -38,6 +38,14 @@ export function UploadView({
     <div className="space-y-4">
       <PrivacyBanner />
 
+      <div aria-live="polite" className="sr-only">
+        {busy
+          ? 'Reading statements…'
+          : files.length > 0
+            ? `${accepted} accepted, ${rejected} not added, ${failed} unreadable.`
+            : ''}
+      </div>
+
       <Panel>
         <PanelHeader
           title="Add statements"
@@ -68,6 +76,7 @@ export function UploadView({
             }}
             role="button"
             tabIndex={0}
+            aria-busy={busy}
             aria-label="Choose statement PDFs"
             className={cn(
               'flex cursor-pointer flex-col items-center justify-center rounded-md px-6 py-12 text-center transition-colors',
