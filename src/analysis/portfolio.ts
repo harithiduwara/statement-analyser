@@ -3,6 +3,7 @@ import { roundMoney } from '@/lib/money';
 import { reconcileAll, summariseReconciliation, type ReconciliationSummary } from './reconcile';
 import { analyseReversals, type ReversalAnalysis } from './reversals';
 import { buildInstallmentRegister, type InstallmentRegister } from './installments';
+import { buildBorrowingCost, type BorrowingCostReport } from './borrowingCost';
 import { buildForwardSchedule, type ForwardSchedule } from './forward';
 import { analyseChain, type ChainAnalysis } from './gaps';
 import { decomposeCycles, type CycleDecomposition } from './decomposition';
@@ -39,6 +40,7 @@ export interface Portfolio {
   reconciliationSummary: ReconciliationSummary;
   reversals: ReversalAnalysis;
   register: InstallmentRegister;
+  borrowingCost: BorrowingCostReport;
   forward: ForwardSchedule;
   chain: ChainAnalysis;
   decomposition: CycleDecomposition[];
@@ -67,6 +69,7 @@ export function buildPortfolio(statements: readonly Statement[]): Portfolio {
   const reconciliations = reconcileAll(ordered);
   const reversals = analyseReversals(ordered);
   const register = buildInstallmentRegister(ordered, reversals);
+  const borrowingCost = buildBorrowingCost(ordered, register, reversals.trueCharges);
   const forward = buildForwardSchedule(register);
   const chain = analyseChain(ordered);
   const decomposition = decomposeCycles(ordered, reversals);
@@ -94,6 +97,7 @@ export function buildPortfolio(statements: readonly Statement[]): Portfolio {
     reconciliationSummary: summariseReconciliation(reconciliations),
     reversals,
     register,
+    borrowingCost,
     forward,
     chain,
     decomposition,

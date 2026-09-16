@@ -1,6 +1,7 @@
 import type { Money, Statement, Txn } from '@/domain/types';
 import { addMonths, monthKey } from '@/lib/dates';
 import { roundMoney } from '@/lib/money';
+import { annuityRate, effectiveAnnualRate } from '@/lib/finance';
 import { merchantsMatch, normaliseMerchant } from './merchant';
 import type { ReversalAnalysis } from './reversals';
 
@@ -39,6 +40,15 @@ export interface InstallmentPlan {
   costOfCredit?: number;
   /** Absolute financing cost, when the principal was observed. */
   financingCost?: Money;
+  /** Per-month internal rate of return, when the plan is priced. */
+  effectiveMonthlyRate?: number;
+  /** Nominal annual rate: monthly IRR x 12. */
+  nominalApr?: number;
+  /**
+   * Effective annual rate: (1 + monthly IRR)^12 - 1. The term-normalised,
+   * comparable cost of the plan -- what a "0% with a fee" plan really charges.
+   */
+  effectiveApr?: number;
   /** `YYYY-MM` of the final scheduled payment. */
   finalPaymentMonth: string;
   /** Month the latest observed instalment fell in. */
@@ -206,6 +216,15 @@ function finalisePlan(
   const costOfCredit =
     rawCost === undefined ? undefined : reliable ? Math.max(0, rawCost) : undefined;
 
+  // The plan is a loan: principal advanced, `monthly` repaid for the term. Its
+  // internal rate of return, annualised, is the one figure that compares plans
+  // of different terms -- and it counts the processing fee a "0% plan" still
+  // charges, because `monthly` already folds that fee in.
+  const monthlyRate =
+    originalPrincipal !== undefined && costOfCredit !== undefined
+      ? annuityRate(originalPrincipal, monthly, draft.termCount)
+      : undefined;
+
   const latestMonth = monthKey(draft.latestDate);
 
   return {
@@ -229,6 +248,13 @@ function finalisePlan(
       : {
           costOfCredit,
           financingCost: roundMoney(totalPayable - (originalPrincipal ?? 0)),
+        }),
+    ...(monthlyRate === undefined
+      ? {}
+      : {
+          effectiveMonthlyRate: monthlyRate,
+          nominalApr: monthlyRate * 12,
+          effectiveApr: effectiveAnnualRate(monthlyRate),
         }),
     finalPaymentMonth: addMonths(latestMonth, remaining),
     latestMonth,

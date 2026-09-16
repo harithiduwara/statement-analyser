@@ -125,6 +125,7 @@ src/domain/types.ts        the domain model and the money sign convention
 src/lib/money.ts           amount parsing, including the CR-suffix rule
 src/lib/mask.ts            card masking, applied at the point of extraction
 src/lib/dates.ts           day-first date parsing, no assumed cycle day
+src/lib/finance.ts         time-value-of-money: annuity IRR and effective rate
 src/parsing/pdf.ts         the only pdf.js dependency in the codebase
 src/parsing/textLayer.ts   positioned text items -> rows -> gap-aware strings
 src/parsing/headerGrid.ts  label/value grids read by column
@@ -134,6 +135,7 @@ src/parsing/parser.ts      StatementParser interface + issuer registry
 src/parsing/seylan/        the Seylan adapter
 src/parsing/sampath/       the Sampath adapter
 src/analysis/reconcile.ts  opening + charges - payments = closing
+src/analysis/borrowingCost.ts  effective APR per plan, card EAR, all-in carry cost
 src/state/                 in-memory statement library, duplicate detection
 src/ui/                    upload panel and statement view
 ```
@@ -198,7 +200,7 @@ gitignored.
 
 ## The app
 
-Seven routes, all client-side, hash-routed so the build works from a
+Eight routes, all client-side, hash-routed so the build works from a
 repository subpath or a local `file://` copy with no server to rewrite paths.
 
 | Route | What it answers |
@@ -208,6 +210,7 @@ repository subpath or a local `file://` copy with no server to rewrite paths.
 | **Cycles** | The reconciliation table, with missing statements marked inline |
 | **Instalments** | The plan register and what each plan costs to carry |
 | **Forward** | The obligation curve, and what settling a plan early is worth |
+| **Cost** | The effective rate of carrying a balance, and each plan's true APR |
 | **Categories** | Spend by purpose, on an economic or a cash basis |
 | **Transactions** | Every line, filterable, with CSV export |
 

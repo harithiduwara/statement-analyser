@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ListTree,
   Moon,
+  Percent,
   Receipt,
   Scale,
   Sun,
@@ -25,6 +26,7 @@ import { OverviewView } from './views/Overview';
 import { CyclesView } from './views/Cycles';
 import { InstalmentsView } from './views/Instalments';
 import { ForwardView } from './views/Forward';
+import { CostView } from './views/Cost';
 import { CategoriesView } from './views/Categories';
 import { TransactionsView } from './views/Transactions';
 
@@ -41,6 +43,7 @@ const NAV: NavItem[] = [
   { route: 'cycles', label: 'Cycles', icon: Scale, description: 'Reconciliation and gaps' },
   { route: 'instalments', label: 'Instalments', icon: ListTree, description: 'Plan register' },
   { route: 'forward', label: 'Forward', icon: CalendarClock, description: 'Obligation schedule' },
+  { route: 'cost', label: 'Cost', icon: Percent, description: 'True cost of borrowing' },
   { route: 'categories', label: 'Categories', icon: Tags, description: 'Spend by purpose' },
   { route: 'transactions', label: 'Transactions', icon: Receipt, description: 'Every line' },
 ];
@@ -51,6 +54,7 @@ const TITLES: Record<Route, { title: string; subtitle: string }> = {
   cycles: { title: 'Cycles', subtitle: 'Opening + charges − payments = closing, checked on every cycle' },
   instalments: { title: 'Instalments', subtitle: 'Every plan across every statement, and what each one costs' },
   forward: { title: 'Forward schedule', subtitle: 'What the contracted plans require, month by month' },
+  cost: { title: 'Cost of borrowing', subtitle: 'The effective rate you pay to carry a balance, and what each plan really costs' },
   categories: { title: 'Categories', subtitle: 'Spend by purpose, on an economic or a cash basis' },
   transactions: { title: 'Transactions', subtitle: 'Every line from every loaded statement' },
 };
@@ -93,6 +97,7 @@ export function App() {
           cycles: portfolio.reconciliationSummary.failed.length + portfolio.chain.gaps.length,
           instalments: portfolio.register.plans.filter((p) => p.remaining > 0).length,
           forward: 0,
+          cost: portfolio.borrowingCost.pricedPlans.filter((p) => (p.effectiveApr ?? 0) > 0.005).length,
           categories: 0,
           transactions: portfolio.statements.reduce((n, s) => n + s.transactions.length, 0),
         }}
@@ -151,6 +156,7 @@ export function App() {
           {route === 'cycles' ? <CyclesView portfolio={portfolio} /> : null}
           {route === 'instalments' ? <InstalmentsView portfolio={portfolio} /> : null}
           {route === 'forward' ? <ForwardView portfolio={portfolio} /> : null}
+          {route === 'cost' ? <CostView portfolio={portfolio} /> : null}
           {route === 'categories' ? (
             <CategoriesView
               portfolio={portfolio}

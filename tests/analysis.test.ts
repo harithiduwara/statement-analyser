@@ -334,3 +334,66 @@ describe('portfolio', () => {
     expect(p.monthlyAverageInstallment).toBe(2_000);
   });
 });
+
+describe('cost of borrowing', () => {
+  // A plan whose origination is observed, so it can be priced: 100,000 booked,
+  // reversed the next day, and re-booked as 12 x (9,000 repayment + 500 fee),
+  // alongside a month of interest and an annual fee.
+  function pricedPlanCycle() {
+    return statement({
+      date: '2026-05-05',
+      opening: 0,
+      transactions: [
+        txn({ post: '2026-04-10', description: 'GLOBEX - KANDY', amount: 100_000 }),
+        txn({ post: '2026-04-11', description: 'GLOBEX - KANDY', amount: -100_000 }),
+        txn({ post: '2026-04-11', description: 'GLOBEX INSTALLMENT REPAYMENT 1/12', amount: 9_000 }),
+        txn({ post: '2026-04-11', description: 'GLOBEX INSTALLMENT PROCESSING FEES 1/12', amount: 500 }),
+        txn({ post: '2026-04-20', description: 'INTEREST', amount: 1_500, classification: 'interest' }),
+        txn({ post: '2026-04-22', description: 'ANNUAL FEE', amount: 4_000, classification: 'annual_fee' }),
+      ],
+    });
+  }
+
+  it('prices a short plan at an effective APR above its headline total cost', () => {
+    const p = buildPortfolio([pricedPlanCycle()]);
+    const plan = p.register.plans.find((pl) => pl.effectiveApr !== undefined);
+    expect(plan).toBeDefined();
+    // Total cost over the term is 14% (114,000 / 100,000). Annualised, a
+    // 12-month amortising plan costs more than that headline, because the
+    // balance is being repaid throughout, not held for the full year.
+    expect(plan!.costOfCredit).toBeCloseTo(0.14, 2);
+    expect(plan!.effectiveApr!).toBeGreaterThan(plan!.costOfCredit!);
+    expect(plan!.effectiveApr!).toBeGreaterThan(0.24);
+    expect(plan!.effectiveApr!).toBeLessThan(0.32);
+    // Compounding makes the effective rate exceed the nominal (IRR x 12).
+    expect(plan!.effectiveApr!).toBeGreaterThan(plan!.nominalApr!);
+  });
+
+  it('sums every card cost into the all-in P&L, net of reversals', () => {
+    const bc = buildPortfolio([pricedPlanCycle()]).borrowingCost;
+    // interest 1,500 + instalment fee 500 + annual fee 4,000 = 6,000
+    expect(bc.totalCost).toBe(6_000);
+    expect(bc.components.map((c) => c.key).sort()).toEqual([
+      'annual_fee',
+      'instalment_fees',
+      'interest',
+    ]);
+    // Spend excludes the reversed origination: 9,000 + 500 + 1,500 + 4,000.
+    expect(bc.carryCostRatio).toBeCloseTo(6_000 / 15_000, 6);
+  });
+
+  it('restates the printed card rate as an effective annual rate', () => {
+    const card = buildPortfolio([pricedPlanCycle()]).borrowingCost.cards[0]!;
+    expect(card.printedAnnualRate).toBe(0.28);
+    expect(card.effectiveAnnualRate).toBeCloseTo(0.319, 3); // (1 + 0.28/12)^12 - 1
+    expect(card.interestCharged).toBe(1_500);
+  });
+
+  it('is safe on an empty set', () => {
+    const bc = buildPortfolio([]).borrowingCost;
+    expect(bc.totalCost).toBe(0);
+    expect(bc.annualisedCost).toBe(0);
+    expect(bc.carryCostRatio).toBeUndefined();
+    expect(bc.pricedPlans).toHaveLength(0);
+  });
+});

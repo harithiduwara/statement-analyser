@@ -15,6 +15,7 @@ export const ROUTES = [
   'cycles',
   'instalments',
   'forward',
+  'cost',
   'categories',
   'transactions',
 ] as const;

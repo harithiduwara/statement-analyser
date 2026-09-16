@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Portfolio } from '@/analysis/portfolio';
 import type { InstallmentPlan } from '@/analysis/installments';
 import { formatMoney } from '@/lib/money';
+import { formatPercent } from '@/lib/finance';
 import { formatMonthKey } from '@/lib/dates';
 import { Chip, EmptyState, Panel, PanelHeader } from '../primitives';
 import { RankedBarChart } from '../charts';
@@ -85,6 +86,7 @@ export function InstalmentsView({ portfolio }: { portfolio: Portfolio }) {
                 <th className="right">Total payable</th>
                 <th className="right">Principal</th>
                 <SortHeader label="Cost of credit" k="costOfCredit" sort={sort} onSort={setSort} right />
+                <th className="right">Effective APR</th>
                 <th>Final payment</th>
               </tr>
             </thead>
@@ -138,6 +140,15 @@ export function InstalmentsView({ portfolio }: { portfolio: Portfolio }) {
                       <b style={{ color: 'var(--series-2)' }}>
                         {(p.costOfCredit * 100).toFixed(1)}%
                       </b>
+                    )}
+                  </td>
+                  <td className="num right">
+                    {p.effectiveApr === undefined ? (
+                      <span style={{ color: 'var(--ink-muted)' }}>n/a</span>
+                    ) : p.effectiveApr < 0.005 ? (
+                      <Chip tone="good" dot={false}>0.0%</Chip>
+                    ) : (
+                      <b style={{ color: 'var(--series-2)' }}>{formatPercent(p.effectiveApr)}</b>
                     )}
                   </td>
                   <td className="whitespace-nowrap" style={{ color: 'var(--ink-secondary)' }}>
