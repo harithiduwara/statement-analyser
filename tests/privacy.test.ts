@@ -61,7 +61,7 @@ describe('no statement ever leaves the browser', () => {
     // Every localStorage key the app writes, and what may go in it.
     const writers = files.filter((f) => /localStorage\.setItem/.test(code(f)));
     expect(writers.sort()).toEqual(
-      ['src/state/useCategoryRules.ts', 'src/ui/theme.ts'].sort(),
+      ['src/state/useCategoryRules.ts', 'src/state/usePlanStore.ts', 'src/ui/theme.ts'].sort(),
     );
     // Neither writer may reach a Statement or a Txn.
     for (const file of writers) {

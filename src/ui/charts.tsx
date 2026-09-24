@@ -4,9 +4,12 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Label,
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -442,5 +445,73 @@ function ValueLabel(props: { x?: number; y?: number; width?: number; height?: nu
     >
       {formatMoney(value)}
     </text>
+  );
+}
+
+// --- monthly plan donut -----------------------------------------------------
+
+export interface DonutDatum {
+  label: string;
+  value: number;
+  color: string;
+}
+
+/**
+ * A part-to-whole ring for the monthly plan. Identity is not left to colour:
+ * the panel renders a labelled legend beside it, and hover names each slice.
+ */
+export function DonutChart({
+  title,
+  unit,
+  data,
+  centerValue,
+  note,
+}: {
+  title: string;
+  unit: string;
+  data: DonutDatum[];
+  centerValue: string;
+  note?: ReactNode;
+}) {
+  return (
+    <ChartFrame title={title} unit={unit} {...(note === undefined ? {} : { note })} height={220}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="label"
+            innerRadius="62%"
+            outerRadius="92%"
+            paddingAngle={2}
+            stroke="var(--surface)"
+            strokeWidth={2}
+            {...STATIC_MARK}
+          >
+            {data.map((d) => (
+              <Cell key={d.label} fill={d.color} />
+            ))}
+            <Label
+              value={centerValue}
+              position="center"
+              style={{ fontSize: 19, fontWeight: 600, fill: 'var(--ink)' }}
+            />
+          </Pie>
+          <Tooltip content={renderDonutTooltip} />
+        </PieChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
+
+function renderDonutTooltip(props: TooltipContentProps) {
+  if (!props.active || !props.payload?.length) return null;
+  const entry = props.payload[0]!;
+  const color = (entry.payload as { color?: string } | undefined)?.color;
+  return (
+    <TooltipBox
+      label={String(entry.name ?? '')}
+      rows={[{ name: 'per month', value: Number(entry.value ?? 0), ...(color ? { color } : {}) }]}
+    />
   );
 }

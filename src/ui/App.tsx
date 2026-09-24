@@ -10,11 +10,13 @@ import {
   Scale,
   Sun,
   Tags,
+  Wallet,
   Upload as UploadIcon,
 } from 'lucide-react';
 import { missingCapabilities } from '@/parsing/capabilities';
 import { useStatementLibrary } from '@/state/useStatementLibrary';
 import { useCategoryRules } from '@/state/useCategoryRules';
+import { usePlanStore } from '@/state/usePlanStore';
 import { buildPortfolio } from '@/analysis/portfolio';
 import { formatMoney } from '@/lib/money';
 import { href, useRoute, type Route } from './router';
@@ -23,6 +25,7 @@ import { Chip } from './primitives';
 import { cn } from './lib';
 import { UploadView } from './views/Upload';
 import { OverviewView } from './views/Overview';
+import { PlanView } from './views/Plan';
 import { CyclesView } from './views/Cycles';
 import { InstalmentsView } from './views/Instalments';
 import { ForwardView } from './views/Forward';
@@ -40,6 +43,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { route: 'upload', label: 'Upload', icon: UploadIcon, description: 'Add statement PDFs' },
   { route: 'overview', label: 'Overview', icon: LayoutDashboard, description: 'Position and findings' },
+  { route: 'plan', label: 'Monthly plan', icon: Wallet, description: 'Plan the month ahead' },
   { route: 'cycles', label: 'Cycles', icon: Scale, description: 'Reconciliation and gaps' },
   { route: 'instalments', label: 'Instalments', icon: ListTree, description: 'Plan register' },
   { route: 'forward', label: 'Forward', icon: CalendarClock, description: 'Obligation schedule' },
@@ -51,6 +55,7 @@ const NAV: NavItem[] = [
 const TITLES: Record<Route, { title: string; subtitle: string }> = {
   upload: { title: 'Upload', subtitle: 'Statements are read in this browser tab and never sent anywhere' },
   overview: { title: 'Overview', subtitle: 'Where you stand, and what in the figures does not look right' },
+  plan: { title: 'Monthly plan', subtitle: 'What comes in, what is already spoken for, and what is left' },
   cycles: { title: 'Cycles', subtitle: 'Opening + charges − payments = closing, checked on every cycle' },
   instalments: { title: 'Instalments', subtitle: 'Every plan across every statement, and what each one costs' },
   forward: { title: 'Forward schedule', subtitle: 'What the contracted plans require, month by month' },
@@ -63,6 +68,7 @@ export function App() {
   const [route, navigate] = useRoute();
   const { files, statements, addFiles, clearAll, busy } = useStatementLibrary();
   const { rules, setRules, reset, clearStored } = useCategoryRules();
+  const planStore = usePlanStore();
   const [theme, setTheme] = useState<ThemeChoice>(readTheme);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
@@ -121,6 +127,7 @@ export function App() {
   const clearEverything = (): void => {
     clearAll();
     clearStored();
+    planStore.clearStored();
     setDismissed(new Set());
     clearTheme();
     setTheme('system');
@@ -150,6 +157,7 @@ export function App() {
         counts={{
           upload: files.length,
           overview: openAnomalies,
+          plan: 0,
           cycles: portfolio.reconciliationSummary.failed.length + portfolio.chain.gaps.length,
           instalments: portfolio.register.plans.filter((p) => p.remaining > 0).length,
           forward: 0,
@@ -220,6 +228,7 @@ export function App() {
               onGoToUpload={() => navigate('upload')}
             />
           ) : null}
+          {route === 'plan' ? <PlanView portfolio={portfolio} rules={rules} store={planStore} /> : null}
           {route === 'cycles' ? <CyclesView portfolio={portfolio} /> : null}
           {route === 'instalments' ? <InstalmentsView portfolio={portfolio} /> : null}
           {route === 'forward' ? <ForwardView portfolio={portfolio} /> : null}
