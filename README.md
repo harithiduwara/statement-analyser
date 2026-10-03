@@ -143,6 +143,15 @@ src/ui/                    upload panel and statement view
 Adding a third issuer is a new file implementing `StatementParser` plus one
 `registerParser` call. Nothing else changes.
 
+### Password-protected statements
+
+Many bank e-statements are encrypted. When a file needs a password the
+upload row turns into a prompt rather than a dead end; the password is
+handed straight to the local pdf.js decoder and never stored or sent. A
+wrong one is reported and asked again. Decryption runs in this tab like
+everything else, so a locked statement stays exactly as private as any
+other.
+
 ### Scanned statements
 
 A statement with no text layer — a scan, or a photo — is read by character

@@ -50,6 +50,8 @@ export interface OcrOptions {
   onProgress?: (progress: OcrProgress) => void;
   /** Abort a long run when the reader navigates away. */
   signal?: AbortSignal;
+  /** Password for an encrypted PDF, handed straight to the local decoder. */
+  password?: string;
 }
 
 /** Where the engine's own files live, relative to the deployed page. */
@@ -104,7 +106,10 @@ export async function ocrDocument(
   });
 
   try {
-    const { doc, destroy } = await getPdfDocument(bytes);
+    const { doc, destroy } = await getPdfDocument(
+      bytes,
+      options.password === undefined ? {} : { password: options.password },
+    );
     try {
       currentPageCount = doc.numPages;
       const pageInputs: OcrPageInput[] = [];

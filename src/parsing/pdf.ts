@@ -56,6 +56,30 @@ async function configureWorker(pdfjs: PdfJsModule): Promise<void> {
 }
 
 /**
+ * A locked PDF, surfaced as a typed error so the UI can ask for a password and
+ * retry rather than report a dead end. `reason` tells the first prompt from a
+ * wrong answer.
+ */
+export class PdfPasswordError extends Error {
+  constructor(readonly reason: 'required' | 'incorrect') {
+    super(reason === 'incorrect' ? 'The PDF password is incorrect.' : 'This PDF needs a password.');
+    this.name = 'PdfPasswordError';
+  }
+}
+
+/**
+ * Recognise pdf.js's password rejection. It throws a `PasswordException` with
+ * code 1 (needs a password) or 2 (the one given is wrong); any other failure
+ * is left alone for the caller to handle.
+ */
+export function classifyPdfError(err: unknown): PdfPasswordError | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const e = err as { name?: unknown; code?: unknown };
+  if (e.name !== 'PasswordException') return undefined;
+  return new PdfPasswordError(e.code === 2 ? 'incorrect' : 'required');
+}
+
+/**
  * Open a PDF with this app's settings, and hand back a way to close it.
  *
  * Shared so the OCR path renders pages through exactly the same configuration
@@ -63,27 +87,45 @@ async function configureWorker(pdfjs: PdfJsModule): Promise<void> {
  * anything. A second `getDocument` call with its own options would be a second
  * place for a network setting to drift.
  */
-export async function getPdfDocument(data: Uint8Array | ArrayBuffer) {
+export async function getPdfDocument(
+  data: Uint8Array | ArrayBuffer,
+  options: { password?: string } = {},
+) {
   const pdfjs = await loadPdfJs();
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
 
   const task = pdfjs.getDocument({
     // pdf.js transfers and neuters the buffer it is handed; copy so callers
-    // can re-read the same File (e.g. to retry through OCR).
+    // can re-read the same File (e.g. to retry through OCR, or with a password).
     data: bytes.slice(),
+    ...(options.password === undefined ? {} : { password: options.password }),
     useWorkerFetch: false,
     disableFontFace: true,
     verbosity: 0,
   });
 
-  const doc = await task.promise;
-  return { doc, destroy: () => task.destroy() };
+  try {
+    const doc = await task.promise;
+    return { doc, destroy: () => task.destroy() };
+  } catch (err) {
+    // A locked PDF is a question for the reader, not a failure: surface it as a
+    // typed error the caller turns into a prompt. The password goes straight to
+    // the local decoder and is never stored.
+    const locked = classifyPdfError(err);
+    if (locked) {
+      void task.destroy();
+      throw locked;
+    }
+    throw err;
+  }
 }
 
 export interface ExtractOptions {
   fileName: string;
   /** Abort a runaway parse rather than hanging the tab. */
   maxPages?: number;
+  /** Password for an encrypted PDF, handed straight to the local decoder. */
+  password?: string;
 }
 
 /** Extract a positioned text layer from PDF bytes. */
@@ -91,7 +133,10 @@ export async function extractTextLayer(
   data: Uint8Array | ArrayBuffer,
   options: ExtractOptions,
 ): Promise<DocumentLayer> {
-  const { doc, destroy } = await getPdfDocument(data);
+  const { doc, destroy } = await getPdfDocument(
+    data,
+    options.password === undefined ? {} : { password: options.password },
+  );
   try {
     const pageCount = Math.min(doc.numPages, options.maxPages ?? 64);
     const pages: PageLayer[] = [];
@@ -139,7 +184,10 @@ export async function extractTextLayer(
 }
 
 /** Extract directly from a browser `File`. */
-export async function extractFromFile(file: File): Promise<DocumentLayer> {
+export async function extractFromFile(file: File, password?: string): Promise<DocumentLayer> {
   const buffer = await file.arrayBuffer();
-  return extractTextLayer(buffer, { fileName: file.name });
+  return extractTextLayer(buffer, {
+    fileName: file.name,
+    ...(password === undefined ? {} : { password }),
+  });
 }

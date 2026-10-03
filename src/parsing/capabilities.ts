@@ -85,7 +85,7 @@ export function explainFailure(error: unknown): string {
   }
 
   if (/password|encrypted/i.test(raw)) {
-    return `This PDF is password protected. Save an unlocked copy and try again. (${raw})`;
+    return `This PDF is password protected. Enter its password when prompted to unlock it. (${raw})`;
   }
 
   if (/Invalid PDF|InvalidPDFException|corrupt/i.test(raw)) {

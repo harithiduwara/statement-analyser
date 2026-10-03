@@ -66,7 +66,7 @@ const TITLES: Record<Route, { title: string; subtitle: string }> = {
 
 export function App() {
   const [route, navigate] = useRoute();
-  const { files, statements, addFiles, clearAll, busy } = useStatementLibrary();
+  const { files, statements, addFiles, submitPassword, clearAll, busy } = useStatementLibrary();
   const { rules, setRules, reset, clearStored } = useCategoryRules();
   const planStore = usePlanStore();
   const [theme, setTheme] = useState<ThemeChoice>(readTheme);
@@ -218,7 +218,13 @@ export function App() {
         >
           <BrowserWarning />
           {route === 'upload' ? (
-            <UploadView files={files} busy={busy} onAdd={addFiles} onClear={clearEverything} />
+            <UploadView
+              files={files}
+              busy={busy}
+              onAdd={addFiles}
+              onClear={clearEverything}
+              onSubmitPassword={submitPassword}
+            />
           ) : null}
           {route === 'overview' ? (
             <OverviewView

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Statement } from '@/domain/types';
-import { extractTextLayer } from '@/parsing/pdf';
+import { extractTextLayer, PdfPasswordError } from '@/parsing/pdf';
 import { assessTextLayer } from '@/parsing/scan';
 import { parseDocument } from '@/parsing/parser';
 import { reconcile } from '@/analysis/reconcile';
@@ -37,12 +37,15 @@ export type FileState =
       statementId: string;
       detail: string;
     }
-  | { kind: 'error'; fileName: string; message: string };
+  | { kind: 'error'; fileName: string; message: string }
+  | { kind: 'password'; fileName: string; file: File; wrong: boolean };
 
 export interface Library {
   files: FileState[];
   statements: Statement[];
   addFiles: (files: readonly File[]) => Promise<void>;
+  /** Retry a password-protected file once the reader has entered its password. */
+  submitPassword: (fileName: string, password: string) => Promise<void>;
   clearAll: () => void;
   busy: boolean;
 }
@@ -114,26 +117,78 @@ export function useStatementLibrary(): Library {
 
       // Dedupe inside the state update rather than against a snapshot, so two
       // files dropped together cannot both pass the check and both be added.
-      setFiles((prev) => {
-        const resolved =
-          outcome.kind === 'parsed'
-            ? resolveAgainstLibrary(prev, file.name, outcome.statement)
-            : outcome.state;
-        return replaceFirstParsing(prev, file.name, resolved);
-      });
+      setFiles((prev) =>
+        replaceFirstParsing(prev, file.name, outcomeToState(prev, file, outcome)),
+      );
     }
 
     setBusy(false);
   }, []);
 
+  /*
+   * A locked file is parked in a `password` state holding the File itself.
+   * When the reader supplies a password we re-run exactly the same parse with
+   * it; a wrong one comes back as `password` again, flagged, for another try.
+   * The password is never stored -- it lives only for the length of this call.
+   */
+  const submitPassword = useCallback(async (fileName: string, password: string) => {
+    let file: File | undefined;
+    setFiles((prev) => {
+      const entry = prev.find(
+        (f): f is Extract<FileState, { kind: 'password' }> =>
+          f.kind === 'password' && f.fileName === fileName,
+      );
+      if (!entry) return prev;
+      file = entry.file;
+      return prev.map((f) =>
+        f.kind === 'password' && f.fileName === fileName ? { kind: 'parsing', fileName } : f,
+      );
+    });
+    if (!file) return;
+
+    setBusy(true);
+    const target = file;
+    const outcome = await parseOne(
+      target,
+      (progress) => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.fileName === fileName && (f.kind === 'parsing' || f.kind === 'ocr')
+              ? { kind: 'ocr', fileName, ...progress }
+              : f,
+          ),
+        );
+      },
+      password,
+    );
+    setFiles((prev) =>
+      replaceFirstParsing(prev, fileName, outcomeToState(prev, target, outcome)),
+    );
+    setBusy(false);
+  }, []);
+
   const clearAll = useCallback(() => setFiles([]), []);
 
-  return { files, statements, addFiles, clearAll, busy };
+  return { files, statements, addFiles, submitPassword, clearAll, busy };
 }
 
 type ParseOutcome =
   | { kind: 'parsed'; statement: Statement }
+  | { kind: 'needs-password'; reason: 'required' | 'incorrect' }
   | { kind: 'failed'; state: FileState };
+
+/** Turn a parse outcome into the file's resting state. */
+function outcomeToState(
+  library: readonly FileState[],
+  file: File,
+  outcome: ParseOutcome,
+): FileState {
+  if (outcome.kind === 'parsed') return resolveAgainstLibrary(library, file.name, outcome.statement);
+  if (outcome.kind === 'needs-password') {
+    return { kind: 'password', fileName: file.name, file, wrong: outcome.reason === 'incorrect' };
+  }
+  return outcome.state;
+}
 
 async function parseOne(
   file: File,
@@ -143,10 +198,12 @@ async function parseOne(
     progress: number;
     status: string;
   }) => void,
+  password?: string,
 ): Promise<ParseOutcome> {
+  const withPassword = password === undefined ? {} : { password };
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const layer = await extractTextLayer(bytes, { fileName: file.name });
+    const layer = await extractTextLayer(bytes, { fileName: file.name, ...withPassword });
     const assessment = assessTextLayer(layer);
 
     /*
@@ -164,6 +221,7 @@ async function parseOne(
       const ocr = await ocrDocument(bytes, {
         fileName: file.name,
         onProgress: onOcrProgress,
+        ...withPassword,
       });
       toParse = ocr.layer;
       source = 'ocr';
@@ -196,6 +254,10 @@ async function parseOne(
       },
     };
   } catch (err) {
+    // A locked PDF is not a failure -- it is a prompt waiting to happen.
+    if (err instanceof PdfPasswordError) {
+      return { kind: 'needs-password', reason: err.reason };
+    }
     return {
       kind: 'failed',
       state: {

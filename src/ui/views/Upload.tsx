@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { Lock } from 'lucide-react';
 import type { FileState } from '@/state/useStatementLibrary';
 import { Button, Chip, EmptyState, Panel, PanelHeader } from '../primitives';
 import { cn } from '../lib';
@@ -10,11 +11,13 @@ export function UploadView({
   busy,
   onAdd,
   onClear,
+  onSubmitPassword,
 }: {
   files: FileState[];
   busy: boolean;
   onAdd: (files: File[]) => void;
   onClear: () => void;
+  onSubmitPassword: (fileName: string, password: string) => void;
 }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +52,7 @@ export function UploadView({
       <Panel>
         <PanelHeader
           title="Add statements"
-          subtitle="Seylan and Sampath PDFs are supported, plus scanned images."
+          subtitle="Seylan and Sampath PDFs are supported, including scanned images and password-protected files."
           aside={
             files.length > 0 ? (
               <Button variant="danger" size="sm" onClick={onClear}>
@@ -114,7 +117,7 @@ export function UploadView({
               </div>
               <ul className="mt-3 space-y-1.5">
                 {files.map((file, i) => (
-                  <FileRow key={`${file.fileName}-${i}`} file={file} />
+                  <FileRow key={`${file.fileName}-${i}`} file={file} onSubmitPassword={onSubmitPassword} />
                 ))}
               </ul>
             </>
@@ -158,7 +161,14 @@ function PrivacyBanner() {
   );
 }
 
-function FileRow({ file }: { file: FileState }) {
+function FileRow({
+  file,
+  onSubmitPassword,
+}: {
+  file: FileState;
+  onSubmitPassword: (fileName: string, password: string) => void;
+}) {
+  if (file.kind === 'password') return <PasswordRow file={file} onSubmit={onSubmitPassword} />;
   return (
     <li
       className="flex items-start gap-3 rounded-md px-3 py-2 text-[11.5px]"
@@ -193,6 +203,8 @@ function statusChip(file: FileState) {
       return <Chip tone="critical">conflict</Chip>;
     case 'error':
       return <Chip tone="critical">unreadable</Chip>;
+    case 'password':
+      return <Chip tone="warning">locked</Chip>;
   }
 }
 
@@ -224,5 +236,63 @@ function detail(file: FileState): string {
       return `Same cycle as ${file.existingFileName}, but the figures differ: ${file.detail}. Not added — one of the two readings is wrong, or the bank reissued this statement.`;
     case 'error':
       return file.message;
+    case 'password':
+      return 'This statement is password protected.';
   }
+}
+
+function PasswordRow({
+  file,
+  onSubmit,
+}: {
+  file: Extract<FileState, { kind: 'password' }>;
+  onSubmit: (fileName: string, password: string) => void;
+}) {
+  const [value, setValue] = useState('');
+  const submit = (): void => {
+    if (value) onSubmit(file.fileName, value);
+  };
+  return (
+    <li className="rounded-md px-3 py-2.5" style={{ border: '1px solid var(--warning)' }}>
+      <div className="flex items-start gap-3 text-[11.5px]">
+        <span className="mt-[2px] shrink-0">
+          <Chip tone="warning">
+            <Lock size={11} aria-hidden /> locked
+          </Chip>
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{file.fileName}</span>
+          <span
+            className="mt-0.5 block leading-snug"
+            style={{ color: file.wrong ? 'var(--critical)' : 'var(--ink-muted)' }}
+          >
+            {file.wrong
+              ? 'That password did not work. Try again.'
+              : 'This statement is password protected. Enter its password to unlock it — the password stays on this device.'}
+          </span>
+          <form
+            className="mt-2 flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <input
+              type="password"
+              value={value}
+              autoFocus
+              placeholder="PDF password"
+              aria-label={`Password for ${file.fileName}`}
+              onChange={(e) => setValue(e.target.value)}
+              className="min-w-0 flex-1 rounded-md px-2 py-1 text-[12px]"
+              style={{ border: '1px solid var(--line-strong)', background: 'transparent', color: 'var(--ink)' }}
+            />
+            <Button variant="primary" size="sm" onClick={submit} disabled={!value}>
+              Unlock
+            </Button>
+          </form>
+        </div>
+      </div>
+    </li>
+  );
 }
