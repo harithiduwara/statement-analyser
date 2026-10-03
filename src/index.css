@@ -3,12 +3,36 @@
 @tailwind utilities;
 
 /*
+ * The one typeface, bundled.
+ *
+ * Inter is self-hosted -- a single latin, weight-axis variable file served
+ * from this origin -- so the page still makes no third-party request and the
+ * "nothing leaves the browser" promise holds. One 48 KB file covers every
+ * weight the UI uses; `swap` keeps text visible while it loads, and the
+ * system stack below it is a graceful fallback, not a flash.
+ */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./assets/fonts/inter-latin-var.woff2') format('woff2');
+  /* Basic Latin + Latin-1 + a few punctuation ranges; anything outside falls
+     back to the system face rather than pulling a second file. */
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+2074, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
  * Design tokens.
  *
  * Colour roles come from a validated data-visualisation palette: the three
  * categorical series slots clear the colourblind-separation, normal-vision and
  * lightness gates in both light and dark. Dark is a selected set of steps for
- * the dark surface, not an automatic inversion of light.
+ * the dark surface, not an automatic inversion of light. Those roles are held
+ * fixed; what the 2026 refresh adds around them is a depth scale (elevation),
+ * a radius scale and a motion scale, so every surface and interaction speaks
+ * the same language.
  *
  * Light-mode aqua (--series-3) sits below 3:1 on the light surface by design,
  * so every chart using it carries a legend and direct labels; identity is
@@ -43,6 +67,27 @@
     --accent: #2a78d6;
     --accent-ink: #ffffff;
     --focus: #2a78d6;
+
+    /* A wash of the accent, for selection and resting interactive fills. */
+    --accent-wash: rgba(42, 120, 214, 0.1);
+    --accent-wash-strong: rgba(42, 120, 214, 0.16);
+
+    /* Elevation. Two stacked shadows read as a single soft cast, not a drop. */
+    --shadow-sm: 0 1px 2px rgba(17, 17, 20, 0.04), 0 1px 1px rgba(17, 17, 20, 0.03);
+    --shadow-md: 0 2px 4px rgba(17, 17, 20, 0.05), 0 6px 16px rgba(17, 17, 20, 0.07);
+    --shadow-lg: 0 10px 30px rgba(17, 17, 20, 0.12), 0 3px 8px rgba(17, 17, 20, 0.07);
+
+    /* Radius scale. */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    /* Motion. One expressive ease for entrances, a symmetric one for toggles. */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-1: 140ms;
+    --dur-2: 240ms;
+    --dur-3: 420ms;
   }
 
   :root:where(:not([data-theme='light'])) {
@@ -64,11 +109,20 @@
       --series-1: #3987e5;
       --series-2: #d95926;
       --series-3: #199e70;
-    --series-4: #8b74f0;
+      --series-4: #8b74f0;
 
       --accent: #3987e5;
       --accent-ink: #0b0b0b;
       --focus: #3987e5;
+
+      --accent-wash: rgba(57, 135, 229, 0.16);
+      --accent-wash-strong: rgba(57, 135, 229, 0.24);
+
+      /* Dark shadows are deeper and higher-alpha; a hairline top highlight
+         keeps a raised surface from reading as a hole. */
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+      --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.6), 0 3px 10px rgba(0, 0, 0, 0.45);
     }
   }
 
@@ -95,6 +149,13 @@
     --accent: #3987e5;
     --accent-ink: #0b0b0b;
     --focus: #3987e5;
+
+    --accent-wash: rgba(57, 135, 229, 0.16);
+    --accent-wash-strong: rgba(57, 135, 229, 0.24);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 34px rgba(0, 0, 0, 0.6), 0 3px 10px rgba(0, 0, 0, 0.45);
   }
 
   html,
@@ -106,8 +167,12 @@
   body {
     background: var(--plane);
     color: var(--ink);
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Inter's contextual alternates and kerning on; nothing opinionated. */
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
   }
 
   /*
@@ -119,6 +184,18 @@
     font-variant-numeric: tabular-nums;
     text-align: right;
     font-feature-settings: 'tnum';
+  }
+
+  /* Hero figures: proportional, but lined and tightly tracked so a large
+     number reads as one shape rather than a row of digits. */
+  .figure {
+    font-feature-settings: 'lnum' 1, 'ss03' 1;
+    letter-spacing: -0.015em;
+    font-variant-numeric: lining-nums;
+  }
+
+  ::selection {
+    background: var(--accent-wash-strong);
   }
 
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
@@ -137,6 +214,10 @@
     border: 3px solid transparent;
     background-clip: content-box;
   }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-muted);
+    background-clip: content-box;
+  }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
@@ -146,7 +227,21 @@
   .panel {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /*
+   * An interactive panel -- a stat tile, a nav target -- lifts a little on
+   * hover: a deeper cast and a one-pixel rise. Transform and shadow only, so
+   * it never reflows the layout, and it is scoped to pointers with motion
+   * allowed below.
+   */
+  .lift {
+    transition:
+      box-shadow var(--dur-2) var(--ease-out),
+      transform var(--dur-2) var(--ease-out),
+      border-color var(--dur-2) var(--ease-out);
   }
 
   /* Dense data table: hairline rules, sticky head, no zebra striping. */
@@ -175,6 +270,7 @@
     padding: 6px 10px;
     border-bottom: 1px solid var(--line);
     vertical-align: top;
+    transition: background var(--dur-1) var(--ease-out);
   }
   .grid-table tbody tr:hover td {
     background: var(--surface-sunken);
@@ -182,6 +278,68 @@
   .grid-table th.right,
   .grid-table td.right {
     text-align: right;
+  }
+}
+
+/*
+ * Motion, scoped to readers who have not asked for less of it. Keeping the
+ * entrances inside this query means a reduced-motion reader never sees an
+ * element start invisible -- the animation is simply never applied, so the
+ * content is at its final state from first paint.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .rise {
+    animation: rise var(--dur-3) var(--ease-out) both;
+  }
+
+  /*
+   * A whole view fades in as one block on navigation. Opacity only, so it
+   * composes with a child `.stagger` that moves -- the page settles in while
+   * its tiles rise -- rather than nesting two transforms and fighting.
+   */
+  .fade {
+    animation: fade var(--dur-2) var(--ease-out) both;
+  }
+
+  /*
+   * A staggered reveal for a grid or list: each child enters a beat after the
+   * last, up to a small cap so a long table never ripples for a noticeable
+   * time. The cascade is a flourish, not a wait.
+   */
+  .stagger > * {
+    animation: rise var(--dur-3) var(--ease-out) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 240ms; }
+
+  .lift:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
   }
 }
 

@@ -171,7 +171,16 @@ export function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header
           className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5"
-          style={{ background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}
+          style={{
+            // Frosted glass: a translucent surface over a blur, so content
+            // scrolling beneath reads as depth rather than disappearing under
+            // an opaque bar. Falls back to the solid surface where
+            // backdrop-filter is unsupported.
+            background: 'color-mix(in srgb, var(--surface) 80%, transparent)',
+            backdropFilter: 'saturate(1.4) blur(10px)',
+            WebkitBackdropFilter: 'saturate(1.4) blur(10px)',
+            borderBottom: '1px solid var(--line)',
+          }}
         >
           <div className="min-w-0">
             <h1 className="text-[15px] font-semibold tracking-tight">{meta.title}</h1>
@@ -217,39 +226,46 @@ export function App() {
           style={{ outline: 'none' }}
         >
           <BrowserWarning />
-          {route === 'upload' ? (
-            <UploadView
-              files={files}
-              busy={busy}
-              onAdd={addFiles}
-              onClear={clearEverything}
-              onSubmitPassword={submitPassword}
-            />
-          ) : null}
-          {route === 'overview' ? (
-            <OverviewView
-              portfolio={portfolio}
-              dismissed={dismissed}
-              onDismiss={(id) => setDismissed((prev) => new Set(prev).add(id))}
-              onGoToUpload={() => navigate('upload')}
-            />
-          ) : null}
-          {route === 'plan' ? <PlanView portfolio={portfolio} rules={rules} store={planStore} /> : null}
-          {route === 'cycles' ? <CyclesView portfolio={portfolio} /> : null}
-          {route === 'instalments' ? <InstalmentsView portfolio={portfolio} /> : null}
-          {route === 'forward' ? <ForwardView portfolio={portfolio} /> : null}
-          {route === 'cost' ? <CostView portfolio={portfolio} /> : null}
-          {route === 'categories' ? (
-            <CategoriesView
-              portfolio={portfolio}
-              rules={rules}
-              onRulesChange={setRules}
-              onResetRules={reset}
-            />
-          ) : null}
-          {route === 'transactions' ? (
-            <TransactionsView portfolio={portfolio} rules={rules} onRulesChange={setRules} />
-          ) : null}
+          {/*
+           * Keyed on the route so a navigation remounts the block and replays
+           * the entrance. A gentle fade, opacity only -- any cascade inside a
+           * view (the Overview tiles) handles its own movement.
+           */}
+          <div key={route} className="fade">
+            {route === 'upload' ? (
+              <UploadView
+                files={files}
+                busy={busy}
+                onAdd={addFiles}
+                onClear={clearEverything}
+                onSubmitPassword={submitPassword}
+              />
+            ) : null}
+            {route === 'overview' ? (
+              <OverviewView
+                portfolio={portfolio}
+                dismissed={dismissed}
+                onDismiss={(id) => setDismissed((prev) => new Set(prev).add(id))}
+                onGoToUpload={() => navigate('upload')}
+              />
+            ) : null}
+            {route === 'plan' ? <PlanView portfolio={portfolio} rules={rules} store={planStore} /> : null}
+            {route === 'cycles' ? <CyclesView portfolio={portfolio} /> : null}
+            {route === 'instalments' ? <InstalmentsView portfolio={portfolio} /> : null}
+            {route === 'forward' ? <ForwardView portfolio={portfolio} /> : null}
+            {route === 'cost' ? <CostView portfolio={portfolio} /> : null}
+            {route === 'categories' ? (
+              <CategoriesView
+                portfolio={portfolio}
+                rules={rules}
+                onRulesChange={setRules}
+                onResetRules={reset}
+              />
+            ) : null}
+            {route === 'transactions' ? (
+              <TransactionsView portfolio={portfolio} rules={rules} onRulesChange={setRules} />
+            ) : null}
+          </div>
         </main>
 
         <footer className="px-5 pb-6 text-[11px]" style={{ color: 'var(--ink-muted)' }}>
@@ -382,11 +398,12 @@ function Sidebar({
                 aria-keyshortcuts={String(i + 1)}
                 title={`${item.description} · press ${i + 1}`}
                 className={cn(
-                  'flex items-start gap-2.5 rounded-md px-2.5 py-2 transition-colors',
+                  'flex items-start gap-2.5 rounded-md px-2.5 py-2',
+                  'transition-[background-color,color,box-shadow] duration-150 ease-out',
+                  active ? 'bg-[var(--accent-wash)]' : 'hover:bg-[var(--surface-sunken)]',
                   disabled && 'opacity-45',
                 )}
                 style={{
-                  background: active ? 'var(--surface-sunken)' : 'transparent',
                   color: active ? 'var(--ink)' : 'var(--ink-secondary)',
                   boxShadow: active ? 'inset 2px 0 0 var(--accent)' : undefined,
                 }}

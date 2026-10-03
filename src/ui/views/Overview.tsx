@@ -37,7 +37,7 @@ export function OverviewView({
   const live = portfolio.anomalies.filter((a) => !dismissed.has(a.id));
 
   return (
-    <div className="space-y-4">
+    <div className="stagger space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat
           label="Statement balance"
