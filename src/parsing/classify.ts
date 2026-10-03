@@ -162,8 +162,7 @@ export function readInstallmentSequence(description: string): InstallmentSequenc
   return undefined;
 }
 
-/** Seylan's `SP nnn` plan identifier, independent of the term count. */
-export function readSeylanPlanCode(description: string): string | undefined {
-  const m = SEYLAN_PLAN_RE.exec(description);
-  return m?.[1] ? `SP${m[1]}` : undefined;
-}
+// `SP nnn of mmm` numbers the instalment (nnn of mmm), it is not a plan serial:
+// the same plan arrives under a new nnn every statement. Seq and term are read
+// by `readInstallment`; nothing derives a plan id from nnn, because doing so
+// would split one plan into one per month.

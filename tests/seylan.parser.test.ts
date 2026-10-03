@@ -95,20 +95,20 @@ describe('Seylan adapter', () => {
     expect(s.transactions.filter((t) => t.description === 'USD')).toHaveLength(0);
   });
 
-  it('reads the instalment plan identifier and term', async () => {
+  it('reads the instalment sequence and term, and no longer a seq-based plan id', async () => {
     const s = await parsePagesOrThrow(seylanStatementPages(), FILE);
     const instalment = s.transactions.find(
       (t) => t.classification === 'installment_repayment',
     );
     expect(instalment?.installmentSeq).toBe(10);
     expect(instalment?.installmentTerm).toBe(36);
-    expect(instalment?.installmentPlanId).toBe('seylan:SP010');
+    expect(instalment?.installmentPlanId).toBeUndefined();
     expect(instalment?.amount).toBe(15_750);
 
     const fee = s.transactions.find(
       (t) => t.classification === 'installment_processing_fee',
     );
-    expect(fee?.installmentPlanId).toBe('seylan:SP010');
+    expect(fee?.installmentPlanId).toBeUndefined();
     expect(fee?.amount).toBe(1_250);
   });
 

@@ -8,7 +8,7 @@ import {
 import { parseDate, resolveYearlessDate } from '@/lib/dates';
 import { moneyEquals, parseAmount, roundMoney, sumMoney } from '@/lib/money';
 import { maskCardNumber, scrubPan } from '@/lib/mask';
-import { classifyTxn, readSeylanPlanCode } from '../classify';
+import { classifyTxn } from '../classify';
 import { readGrid, tokenise, type GridField, type GridHit } from '../headerGrid';
 import { solveRewards, type RewardsRole } from '../rewards';
 import { registerParser, type ParseResult, type StatementParser } from '../parser';
@@ -23,8 +23,9 @@ import { allLines, documentText, type Line } from '../textLayer';
  *  - Transaction rows lead with two dates: post date then transaction date.
  *  - A foreign transaction adds a second line carrying the original currency.
  *  - Per-card subtotals delimit the rows belonging to each card.
- *  - Instalments print `SEYLAN EASY PAY - SP nnn of mmm`; `SP nnn` is the
- *    plan identifier and `mmm` the term count.
+ *  - Instalments print `SEYLAN EASY PAY - SP nnn of mmm`, where `nnn` is the
+ *    instalment number and `mmm` the term -- not a per-plan serial, so the
+ *    same plan appears under a new `nnn` each statement.
  *  - The statement date drifts around the start of the month, so nothing is
  *    keyed off a particular day number.
  */
@@ -389,7 +390,6 @@ function readTransactionRow(
   }
 
   const classification = classifyTxn({ description, amount: amountRead.value });
-  const planCode = readSeylanPlanCode(description);
 
   return {
     id: `${fileName}#${index}`,
@@ -405,7 +405,6 @@ function readTransactionRow(
           installmentSeq: classification.installmentSeq,
           installmentTerm: classification.installmentTerm,
         }),
-    ...(planCode === undefined ? {} : { installmentPlanId: `seylan:${planCode}` }),
     // Defence in depth: the row is kept verbatim for the drill-down, so it is
     // scrubbed of anything card-shaped on the way in rather than on the way out.
     raw: scrubPan(line.text.trim()),

@@ -124,31 +124,63 @@ describe('instalment register', () => {
     expect(plans[0]!.financingCost).toBeUndefined();
   });
 
-  it("folds Seylan's processing fee into the plan it names, not a plan of its own", () => {
+  it("folds Seylan's processing fee into the repayment it shares a position with", () => {
     // Seylan's fee line names no merchant -- every word in it is programme
-    // wording -- so only the printed SP code ties it to its repayment.
+    // wording -- so it is tied to its repayment by the shared `seq of term`,
+    // adopting the repayment's amount as the plan anchor.
     const seylan = statement({
       date: '2026-04-06',
       opening: 0,
       transactions: [
-        {
-          ...txn({ post: '2026-03-12', description: 'SEYLAN EASY PAY - SP 010 of 036', amount: 15_750 }),
-          installmentPlanId: 'seylan:SP010',
-        },
-        {
-          ...txn({ post: '2026-03-12', description: 'EASY PAY PROCESSING FEE - SP 010 of 036', amount: 1_250 }),
-          installmentPlanId: 'seylan:SP010',
-        },
+        txn({ post: '2026-03-12', description: 'SEYLAN EASY PAY - SP 010 of 036', amount: 15_750 }),
+        txn({ post: '2026-03-12', description: 'EASY PAY PROCESSING FEE - SP 010 of 036', amount: 1_250 }),
       ],
     });
     const register = buildInstallmentRegister([seylan], analyseReversals([seylan]));
     expect(register.plans).toHaveLength(1);
     const plan = register.plans[0]!;
-    expect(plan.planCode).toBe('seylan:SP010');
     expect(plan.monthlyRepayment).toBe(15_750);
     expect(plan.monthlyFee).toBe(1_250);
     expect(plan.monthly).toBe(17_000);
     expect(plan.remaining).toBe(26);
+  });
+
+  it('merges one Seylan plan across statements instead of one plan per month', () => {
+    // `SP nnn` numbers the instalment, so the same plan appears under 10, 11,
+    // 12 across three statements. It must stay one plan, not fragment into one
+    // per cycle (which would treble the monthly obligation).
+    const cycleAt = (date: string, seq: number) =>
+      statement({
+        date,
+        opening: 0,
+        transactions: [
+          txn({ post: date, description: `SEYLAN EASY PAY - SP 0${seq} of 036`, amount: 2_890 }),
+          txn({ post: date, description: `EASY PAY PROCESSING FEE - SP 0${seq} of 036`, amount: 250 }),
+        ],
+      });
+    const register = buildInstallmentRegister([
+      cycleAt('2026-01-05', 10),
+      cycleAt('2026-02-05', 11),
+      cycleAt('2026-03-05', 12),
+    ]);
+    expect(register.plans).toHaveLength(1);
+    const plan = register.plans[0]!;
+    expect(plan.monthly).toBe(3_140); // 2,890 + 250, counted once
+    expect(plan.latestInstallment).toBe(12);
+    expect(plan.remaining).toBe(24); // 36 - 12
+    expect(register.monthlyObligation).toBe(3_140);
+  });
+
+  it('keeps two Seylan plans with different monthly amounts apart', () => {
+    const cycle = statement({
+      date: '2026-03-05',
+      opening: 0,
+      transactions: [
+        txn({ post: '2026-03-05', description: 'SEYLAN EASY PAY - SP 05 of 036', amount: 2_890 }),
+        txn({ post: '2026-03-05', description: 'SEYLAN EASY PAY - SP 20 of 036', amount: 20_061 }),
+      ],
+    });
+    expect(buildInstallmentRegister([cycle]).plans).toHaveLength(2);
   });
 
   it('does not double-count a cycle that appears twice', () => {

@@ -92,6 +92,27 @@ export function buildInstallmentRegister(
   const drafts = new Map<string, Draft>();
 
   for (const statement of statements) {
+    /*
+     * A fee line borrows its sibling repayment's identity. The two share a
+     * schedule position (`seq of term`), and the fee line often names neither
+     * the merchant (Seylan) nor its own schedule (Sampath prints the fee with
+     * no n/m), so matching on `term:seq` ties the fee to the repayment it
+     * belongs to rather than letting it drift into a plan of its own.
+     */
+    const repaymentAnchor = new Map<string, { merchant: string; amount: Money }>();
+    for (const txn of statement.transactions) {
+      if (
+        txn.classification === 'installment_repayment' &&
+        txn.installmentTerm !== undefined &&
+        txn.installmentSeq !== undefined
+      ) {
+        repaymentAnchor.set(`${txn.installmentTerm}:${txn.installmentSeq}`, {
+          merchant: normaliseMerchant(txn.description),
+          amount: txn.amount,
+        });
+      }
+    }
+
     for (const txn of statement.transactions) {
       if (
         txn.classification !== 'installment_repayment' &&
@@ -104,18 +125,26 @@ export function buildInstallmentRegister(
       if (term === undefined || seq === undefined) continue;
 
       /*
-       * Key on the issuer's own plan identifier when there is one. Seylan
-       * prints `SP 010 of 036` on both the repayment and its processing fee,
-       * which is definitive; falling back to the merchant name would split
-       * them, because the fee line names no merchant at all -- every word in
-       * `EASY PAY PROCESSING FEE` is a programme word, not an identity.
-       *
-       * Sampath prints no such code, and there the fee line does repeat the
-       * merchant, so merchant plus term is the right key.
+       * Identify the plan, not the instalment. With a stable issuer plan code,
+       * key on that. Otherwise key on merchant, term and the monthly amount:
+       * Seylan's `SP nnn of mmm` only numbers the instalment, so the same plan
+       * arrives under a new `nnn` each statement -- keying on that would split
+       * one plan into one "plan" per month, inflating every obligation total.
+       * The monthly repayment is fixed for a plan's life, so it is what holds
+       * the plan together across statements while still telling two different
+       * plans apart. A fee line adopts its sibling repayment's merchant and
+       * amount so it folds into the same plan rather than forming its own.
        */
-      const merchant = normaliseMerchant(txn.description);
+      const sibling =
+        txn.classification === 'installment_processing_fee'
+          ? repaymentAnchor.get(`${term}:${seq}`)
+          : undefined;
+      const merchant = sibling?.merchant ?? normaliseMerchant(txn.description);
+      const anchorAmount = sibling?.amount ?? txn.amount;
       const planCode = txn.installmentPlanId;
-      const key = planCode ?? `${statement.issuer}:${merchant}:${term}`;
+      const key =
+        planCode ??
+        `${statement.issuer}:${merchant}:${term}:${roundMoney(anchorAmount).toFixed(2)}`;
       const draft = drafts.get(key) ?? {
         key,
         issuer: statement.issuer,

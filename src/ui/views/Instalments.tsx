@@ -5,7 +5,7 @@ import { formatMoney } from '@/lib/money';
 import { formatPercent } from '@/lib/finance';
 import { formatMonthKey } from '@/lib/dates';
 import { Chip, EmptyState, Panel, PanelHeader } from '../primitives';
-import { RankedBarChart } from '../charts';
+import { RankedBarChart, compactLkr } from '../charts';
 
 type SortKey = 'remainingValue' | 'monthly' | 'costOfCredit' | 'remaining' | 'merchant';
 
@@ -60,7 +60,7 @@ export function InstalmentsView({ portfolio }: { portfolio: Portfolio }) {
           unit="LKR still contracted"
           note="monthly instalment × months remaining"
           data={live.slice(0, 14).map((p) => ({
-            label: truncate(p.merchant, 26),
+            label: `${truncate(p.merchant, 16)} · ${compactLkr(p.monthly)}/mo`,
             value: p.remainingValue,
             highlight: (p.costOfCredit ?? 0) > 1e-6,
           }))}

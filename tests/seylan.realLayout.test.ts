@@ -110,11 +110,15 @@ describe('Seylan, real printed layout', () => {
     const s = await parsePagesOrThrow(seylanRealLayoutPages(), FILE);
     const plans = buildPortfolio([s]).register.plans;
     expect(plans).toHaveLength(2);
-    expect(plans.map((p) => p.planCode).sort()).toEqual(['seylan:SP009', 'seylan:SP010']);
-    const sp010 = plans.find((p) => p.planCode === 'seylan:SP010');
-    expect(sp010?.latestInstallment).toBe(10);
-    expect(sp010?.termCount).toBe(36);
-    expect(sp010?.monthly).toBe(27_777.77);
+    // No per-plan serial is printed, so the two are told apart by their fixed
+    // monthly amount, not by the instalment number in `SP nnn`.
+    const big = plans.find((p) => p.monthly === 27_777.77);
+    expect(big?.latestInstallment).toBe(10);
+    expect(big?.termCount).toBe(36);
+    expect(big?.remaining).toBe(26);
+    const small = plans.find((p) => p.monthly === 2_890);
+    expect(small?.latestInstallment).toBe(9);
+    expect(small?.remaining).toBe(27);
   });
 
   it('attaches the foreign-currency leg and derives the rate', async () => {
