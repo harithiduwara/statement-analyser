@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Lock } from 'lucide-react';
+import { FileDown, FileUp, Lock } from 'lucide-react';
 import type { FileState } from '@/state/useStatementLibrary';
 import { Button, Chip, EmptyState, Panel, PanelHeader } from '../primitives';
 import { cn } from '../lib';
@@ -12,12 +12,18 @@ export function UploadView({
   onAdd,
   onClear,
   onSubmitPassword,
+  onExportExcel,
+  onImportExcel,
+  canExport,
 }: {
   files: FileState[];
   busy: boolean;
   onAdd: (files: File[]) => void;
   onClear: () => void;
   onSubmitPassword: (fileName: string, password: string) => void;
+  onExportExcel: () => Promise<void>;
+  onImportExcel: (file: File) => Promise<{ read: number; issues: string[] }>;
+  canExport: boolean;
 }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +131,12 @@ export function UploadView({
         </div>
       </Panel>
 
+      <BackupRestore
+        onExportExcel={onExportExcel}
+        onImportExcel={onImportExcel}
+        canExport={canExport}
+      />
+
       {files.length === 0 ? (
         <EmptyState title="Nothing loaded yet">
           Every figure in this app is derived from the statements you add here, in this browser tab.
@@ -158,6 +170,111 @@ function PrivacyBanner() {
         </div>
       </div>
     </div>
+  );
+}
+
+function BackupRestore({
+  onExportExcel,
+  onImportExcel,
+  canExport,
+}: {
+  onExportExcel: () => Promise<void>;
+  onImportExcel: (file: File) => Promise<{ read: number; issues: string[] }>;
+  canExport: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [note, setNote] = useState<{ read: number; issues: string[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const doExport = async (): Promise<void> => {
+    setError(null);
+    setExporting(true);
+    try {
+      await onExportExcel();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The workbook could not be created.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const doImport = async (file: File): Promise<void> => {
+    setError(null);
+    setNote(null);
+    setImporting(true);
+    try {
+      setNote(await onImportExcel(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The workbook could not be read.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="Back up & restore"
+        subtitle="Save everything loaded as an Excel file — a readable report that also loads back here, so you never re-read a statement you already have."
+      />
+      <div className="p-4">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => void doExport()} disabled={!canExport || exporting}>
+            <FileDown size={13} aria-hidden />
+            {exporting ? 'Preparing…' : 'Export to Excel'}
+          </Button>
+          <Button onClick={() => inputRef.current?.click()} disabled={importing}>
+            <FileUp size={13} aria-hidden />
+            {importing ? 'Reading…' : 'Restore from Excel'}
+          </Button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void doImport(file);
+              e.target.value = '';
+            }}
+          />
+        </div>
+        <p className="mt-2.5 text-[11px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+          The workbook is built and read in this tab — nothing is uploaded. Restoring adds its
+          statements alongside whatever is loaded; a cycle already present is skipped, never counted
+          twice.
+          {canExport ? '' : ' Load a statement first to export.'}
+        </p>
+
+        {note ? (
+          <div
+            className="mt-3 rounded-md px-3 py-2 text-[11.5px]"
+            style={{ border: '1px solid var(--line)', background: 'var(--surface-sunken)' }}
+          >
+            <p className="font-medium">
+              Read {note.read} statement{note.read === 1 ? '' : 's'} from the workbook — see the list
+              above for which were added and which were already loaded.
+            </p>
+            {note.issues.length > 0 ? (
+              <ul className="mt-1.5 space-y-0.5" style={{ color: 'var(--ink-muted)' }}>
+                {note.issues.slice(0, 6).map((issue, i) => (
+                  <li key={i}>· {issue}</li>
+                ))}
+                {note.issues.length > 6 ? <li>· …and {note.issues.length - 6} more</li> : null}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="mt-3 text-[11.5px]" style={{ color: 'var(--critical)' }}>
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
   );
 }
 

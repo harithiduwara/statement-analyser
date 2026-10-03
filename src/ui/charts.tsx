@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Download } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -67,6 +68,7 @@ export function ChartFrame({
   children: ReactNode;
   aside?: ReactNode;
 }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
   return (
     <figure className="panel m-0 px-4 py-3">
       <figcaption className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -77,10 +79,101 @@ export function ChartFrame({
             {note ? <> · {note}</> : null}
           </p>
         </div>
-        {aside}
+        <div className="flex items-center gap-2">
+          {aside}
+          <ChartExport getSvg={() => bodyRef.current?.querySelector('svg') ?? null} title={title} />
+        </div>
       </figcaption>
-      <div style={{ height }}>{children}</div>
+      <div ref={bodyRef} style={{ height }}>
+        {children}
+      </div>
     </figure>
+  );
+}
+
+/**
+ * Per-chart export. The chart is already an on-screen SVG, so this grabs it and
+ * hands it to the dependency-free rasteriser -- loaded only on first use. A
+ * backdrop closes the little menu on an outside click.
+ */
+function ChartExport({ getSvg, title }: { getSvg: () => SVGSVGElement | null; title: string }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (kind: 'pdf' | 'png'): Promise<void> => {
+    const svg = getSvg();
+    setOpen(false);
+    if (!svg) return;
+    setBusy(true);
+    try {
+      const chartImage = await import('@/export/chartImage');
+      const base = slugify(title);
+      if (kind === 'pdf') await chartImage.exportChartPdf(svg, { title, filename: `${base}.pdf` });
+      else await chartImage.exportChartPng(svg, `${base}.png`);
+    } catch {
+      // Nothing is sent or stored, so a failed export leaves no trace to undo.
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={busy}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Export this chart"
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-[background-color,border-color] duration-150 ease-out hover:bg-[var(--surface-sunken)]"
+        style={{ color: 'var(--ink-secondary)', border: '1px solid var(--line-strong)' }}
+      >
+        <Download size={12} aria-hidden />
+        {busy ? 'Exporting…' : 'Export'}
+      </button>
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-10" aria-hidden onClick={() => setOpen(false)} />
+          <div
+            role="menu"
+            className="absolute right-0 z-20 mt-1 min-w-[132px] overflow-hidden rounded-md py-1 text-[11.5px]"
+            style={{
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--line-strong)',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <ChartExportItem onClick={() => void run('pdf')}>PDF document</ChartExportItem>
+            <ChartExportItem onClick={() => void run('png')}>PNG image</ChartExportItem>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ChartExportItem({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="block w-full px-3 py-1.5 text-left transition-colors hover:bg-[var(--surface-sunken)]"
+      style={{ color: 'var(--ink)' }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 48) || 'chart'
   );
 }
 

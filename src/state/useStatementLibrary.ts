@@ -44,6 +44,8 @@ export interface Library {
   files: FileState[];
   statements: Statement[];
   addFiles: (files: readonly File[]) => Promise<void>;
+  /** Restore already-parsed statements (from an Excel backup), deduped like PDFs. */
+  addStatements: (statements: readonly Statement[]) => void;
   /** Retry a password-protected file once the reader has entered its password. */
   submitPassword: (fileName: string, password: string) => Promise<void>;
   clearAll: () => void;
@@ -167,9 +169,30 @@ export function useStatementLibrary(): Library {
     setBusy(false);
   }, []);
 
+  /*
+   * Restore statements rebuilt from an Excel backup. They arrive already
+   * parsed, so there is no PDF to read -- but they go through exactly the same
+   * dedupe as an upload, so re-importing a backup, or adding a PDF of a cycle
+   * the backup already holds, is refused as a duplicate rather than counted
+   * twice. Resolved against the growing list so one import cannot admit the
+   * same cycle under two rows.
+   */
+  const addStatements = useCallback((incoming: readonly Statement[]) => {
+    if (incoming.length === 0) return;
+    setFiles((prev) => {
+      let next = prev;
+      for (const statement of incoming) {
+        const fileName =
+          statement.sourceFileName || `${statement.issuer}-${statement.statementDate}`;
+        next = [...next, resolveAgainstLibrary(next, fileName, statement)];
+      }
+      return next;
+    });
+  }, []);
+
   const clearAll = useCallback(() => setFiles([]), []);
 
-  return { files, statements, addFiles, submitPassword, clearAll, busy };
+  return { files, statements, addFiles, addStatements, submitPassword, clearAll, busy };
 }
 
 type ParseOutcome =

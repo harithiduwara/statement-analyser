@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -70,7 +70,8 @@ const TITLES: Record<Route, { title: string; subtitle: string }> = {
 
 export function App() {
   const [route, navigate] = useRoute();
-  const { files, statements, addFiles, submitPassword, clearAll, busy } = useStatementLibrary();
+  const { files, statements, addFiles, addStatements, submitPassword, clearAll, busy } =
+    useStatementLibrary();
   const { rules, setRules, reset, clearStored } = useCategoryRules();
   const planStore = usePlanStore();
   const [theme, setTheme] = useState<ThemeChoice>(readTheme);
@@ -80,6 +81,27 @@ export function App() {
 
   const portfolio = useMemo(() => buildPortfolio(statements), [statements]);
   const openAnomalies = portfolio.anomalies.filter((a) => !dismissed.has(a.id)).length;
+
+  /*
+   * Excel export and restore. Both modules -- and exceljs behind them -- load
+   * only when the reader actually exports or imports, so the workbook code is
+   * never in the first paint. Restoring routes through the library's dedupe, so
+   * a cycle already loaded is refused rather than doubled.
+   */
+  const onExportExcel = useCallback(async () => {
+    const { downloadWorkbook } = await import('@/export/workbook');
+    await downloadWorkbook(portfolio, rules);
+  }, [portfolio, rules]);
+
+  const onImportExcel = useCallback(
+    async (file: File): Promise<{ read: number; issues: string[] }> => {
+      const { importWorkbook } = await import('@/export/importWorkbook');
+      const { statements: restored, issues } = await importWorkbook(await file.arrayBuffer());
+      addStatements(restored);
+      return { read: restored.length, issues };
+    },
+    [addStatements],
+  );
 
   const mainRef = useRef<HTMLElement>(null);
   const firstRender = useRef(true);
@@ -246,6 +268,9 @@ export function App() {
                 onAdd={addFiles}
                 onClear={clearEverything}
                 onSubmitPassword={submitPassword}
+                onExportExcel={onExportExcel}
+                onImportExcel={onImportExcel}
+                canExport={!portfolio.isEmpty}
               />
             ) : null}
             {route === 'overview' ? (
