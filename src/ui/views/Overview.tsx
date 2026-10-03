@@ -33,12 +33,12 @@ export function OverviewView({
     );
   }
 
-  const { reconciliationSummary: recon, register, reversals } = portfolio;
+  const { reconciliationSummary: recon, register } = portfolio;
   const live = portfolio.anomalies.filter((a) => !dismissed.has(a.id));
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Stat
           label="Statement balance"
           value={formatMoney(portfolio.statementBalance)}
@@ -54,14 +54,9 @@ export function OverviewView({
           value={formatMoney(portfolio.monthlyAverageSpend)}
           hint={`Mean charges per cycle across ${portfolio.statements.length} cycle${portfolio.statements.length === 1 ? '' : 's'}, reversals removed`}
         />
-        <Stat
-          label="Avg monthly instalment"
-          value={formatMoney(portfolio.monthlyAverageInstallment)}
-          hint={`Mean instalment charges — repayment and fee — billed per cycle across ${portfolio.statements.length} cycle${portfolio.statements.length === 1 ? '' : 's'}`}
-        />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Stat
           label="Monthly instalments"
           value={formatMoney(register.monthlyObligation)}
@@ -76,26 +71,6 @@ export function OverviewView({
             recon.failed.length === 0
               ? 'Every loaded cycle satisfies opening + charges − payments = closing'
               : `${recon.failed.length} cycle(s) do not balance — see Cycles`
-          }
-        />
-        <Stat
-          label="Reversals removed"
-          value={formatMoney(reversals.matchedReversals)}
-          hint={`Gross debits ${formatMoney(reversals.grossDebits)} less reversals gives true charges of ${formatMoney(reversals.trueCharges)}`}
-        />
-        <Stat
-          label="Cost of credit"
-          value={
-            register.pricedCount === 0
-              ? 'n/a'
-              : `${register.zeroCostCount} of ${register.pricedCount} at 0%`
-          }
-          unit={null}
-          tone={register.totalFinancingCost > 0 ? 'warning' : 'good'}
-          hint={
-            register.pricedCount === 0
-              ? 'No plan origination was observed, so no plan can be priced. Load the earlier cycles to price them.'
-              : `${formatMoney(register.totalFinancingCost)} of financing cost across the priced plans`
           }
         />
       </div>

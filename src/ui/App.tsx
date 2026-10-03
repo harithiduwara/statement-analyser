@@ -248,7 +248,7 @@ export function App() {
             />
           ) : null}
           {route === 'transactions' ? (
-            <TransactionsView portfolio={portfolio} rules={rules} />
+            <TransactionsView portfolio={portfolio} rules={rules} onRulesChange={setRules} />
           ) : null}
         </main>
 

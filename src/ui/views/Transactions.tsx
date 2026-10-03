@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react';
 import type { Portfolio } from '@/analysis/portfolio';
 import { TXN_CLASSES, type Txn, type TxnClass } from '@/domain/types';
-import { categoriseTxn, compileRules, type CategoryRule } from '@/analysis/categories';
+import {
+  CATEGORIES,
+  categoriseTxn,
+  compileRules,
+  isCategoryByClass,
+  upsertMerchantRule,
+  type Category,
+  type CategoryRule,
+} from '@/analysis/categories';
 import { formatMoney } from '@/lib/money';
 import { formatDate } from '@/lib/dates';
 import { Button, Chip, EmptyState, Panel, PanelHeader } from '../primitives';
@@ -21,9 +29,11 @@ interface Row {
 export function TransactionsView({
   portfolio,
   rules,
+  onRulesChange,
 }: {
   portfolio: Portfolio;
   rules: CategoryRule[];
+  onRulesChange: (rules: CategoryRule[]) => void;
 }) {
   const [query, setQuery] = useState('');
   const [issuer, setIssuer] = useState('all');
@@ -33,6 +43,16 @@ export function TransactionsView({
   const [limit, setLimit] = useState(PAGE_SIZE);
 
   const compiled = useMemo(() => compileRules(rules), [rules]);
+
+  /*
+   * Tagging a row writes a merchant rule, not a one-off label: the choice is
+   * remembered and applies to every line from that merchant, past and future.
+   * The re-categorisation happens for free -- the rows above are derived from
+   * the rules, so the next render reflects the new rule everywhere it matches.
+   */
+  const assignCategory = (description: string, next: Category): void => {
+    onRulesChange(upsertMerchantRule(rules, description, next));
+  };
 
   const rows = useMemo<Row[]>(
     () =>
@@ -93,7 +113,7 @@ export function TransactionsView({
       <Panel>
         <PanelHeader
           title="Transactions"
-          subtitle={`${filtered.length} of ${rows.length} rows · net ${formatMoney(total)} LKR`}
+          subtitle={`${filtered.length} of ${rows.length} rows · net ${formatMoney(total)} LKR · set a row's category to tag that merchant everywhere`}
           aside={
             <Button size="sm" onClick={() => downloadCsv(filtered)}>
               Export CSV
@@ -176,7 +196,7 @@ export function TransactionsView({
                   <td className="whitespace-nowrap" style={{ color: 'var(--ink-secondary)' }}>
                     {r.txn.classification.replace(/_/g, ' ')}
                   </td>
-                  <td style={{ color: 'var(--ink-secondary)' }}>{r.category}</td>
+                  <CategoryCell row={r} onPick={(c) => assignCategory(r.txn.description, c)} />
                 </tr>
               ))}
             </tbody>
@@ -195,6 +215,47 @@ export function TransactionsView({
         ) : null}
       </Panel>
     </div>
+  );
+}
+
+/**
+ * The category cell doubles as the control for setting it. Rows whose category
+ * is fixed by their class -- a finance charge is always fees & interest -- show
+ * the label as read-only text, so the picker never offers a choice the engine
+ * would override.
+ */
+function CategoryCell({ row, onPick }: { row: Row; onPick: (category: Category) => void }) {
+  if (isCategoryByClass(row.txn)) {
+    return (
+      <td
+        style={{ color: 'var(--ink-muted)' }}
+        title="Set by the transaction type — a finance charge is always fees & interest"
+      >
+        {row.category}
+      </td>
+    );
+  }
+  return (
+    <td>
+      <select
+        value={row.category}
+        onChange={(e) => onPick(e.target.value as Category)}
+        aria-label={`Category for ${row.txn.description}`}
+        title="Tag this merchant — the choice is remembered and applied to every matching line"
+        className="w-full cursor-pointer rounded-md px-1.5 py-1 text-[11.5px]"
+        style={{
+          background: 'var(--surface-sunken)',
+          border: '1px solid var(--line)',
+          color: 'var(--ink-secondary)',
+        }}
+      >
+        {CATEGORIES.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+    </td>
   );
 }
 

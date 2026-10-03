@@ -89,24 +89,72 @@ export function compileRules(rules: readonly CategoryRule[]): CompiledRule[] {
   });
 }
 
-export function categoriseTxn(txn: Txn, rules: readonly CompiledRule[]): Category {
-  // Fees and interest are decided by classification, not by merchant text:
-  // the transaction class already knows, and no regex should be able to
-  // reclassify a finance charge as groceries.
-  if (
+/**
+ * Some categories are decided by the transaction class, not by merchant text:
+ * a finance charge is fees & interest whatever a regex says. For these rows the
+ * class wins and the category picker is read-only.
+ */
+export function isCategoryByClass(txn: Pick<Txn, 'classification'>): boolean {
+  return (
     txn.classification === 'interest' ||
     txn.classification === 'annual_fee' ||
     txn.classification === 'stamp_duty' ||
     txn.classification === 'fuel_surcharge' ||
     txn.classification === 'installment_processing_fee'
-  ) {
-    return 'fees & interest';
-  }
+  );
+}
 
+export function categoriseTxn(txn: Txn, rules: readonly CompiledRule[]): Category {
+  if (isCategoryByClass(txn)) return 'fees & interest';
   for (const rule of rules) {
     if (rule.regex?.test(txn.description)) return rule.category;
   }
   return 'unclassified';
+}
+
+/**
+ * A regex-safe pattern matching a transaction's merchant, for a tap-to-set
+ * rule. The location tail after " - ", the schedule marker and the instalment
+ * programme words are dropped, so `KEELLS SUPER - COLOMBO` and a later
+ * `KEELLS SUPER - GALLE` both match the one rule.
+ */
+export function merchantPattern(description: string): string {
+  const head = description.split(/\s+[-\u2013]\s+/)[0] ?? description;
+  const cleaned = head
+    .replace(/\b\d{1,3}\s*\/\s*\d{1,3}\b/g, ' ')
+    .replace(/\bSP\s*\d{1,3}\s*of\s*\d{1,3}\b/gi, ' ')
+    .replace(/\b(INSTAL?L?MENT|REPAYMENT|PROCESSING|FEES?|EASY\s*PAY)\b/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  const stem =
+    cleaned.split(/\s+/).filter(Boolean).slice(0, 3).join(' ') || head.trim() || description.trim();
+  return stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Add or update a user rule so a transaction's merchant maps to `category`.
+ * The rule goes first, so an explicit choice wins over the seeds, and an
+ * existing user rule for the same merchant is updated rather than stacked.
+ */
+export function upsertMerchantRule(
+  rules: readonly CategoryRule[],
+  description: string,
+  category: Category,
+): CategoryRule[] {
+  const pattern = merchantPattern(description);
+  const index = rules.findIndex((r) => r.pattern === pattern && !r.seeded);
+  if (index >= 0) {
+    const next = [...rules];
+    next[index] = { ...next[index]!, category, enabled: true };
+    return next;
+  }
+  const rule: CategoryRule = {
+    id: `u-${pattern}-${Date.now().toString(36)}`,
+    pattern,
+    category,
+    enabled: true,
+  };
+  return [rule, ...rules];
 }
 
 /**
