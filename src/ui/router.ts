@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 export const ROUTES = [
   'upload',
   'overview',
+  'timeline',
   'plan',
   'cycles',
   'instalments',

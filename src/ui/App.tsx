@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
+  History,
   LayoutDashboard,
   ListTree,
   Moon,
@@ -25,6 +26,7 @@ import { Chip } from './primitives';
 import { cn } from './lib';
 import { UploadView } from './views/Upload';
 import { OverviewView } from './views/Overview';
+import { TimelineView } from './views/Timeline';
 import { PlanView } from './views/Plan';
 import { CyclesView } from './views/Cycles';
 import { InstalmentsView } from './views/Instalments';
@@ -43,6 +45,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { route: 'upload', label: 'Upload', icon: UploadIcon, description: 'Add statement PDFs' },
   { route: 'overview', label: 'Overview', icon: LayoutDashboard, description: 'Position and findings' },
+  { route: 'timeline', label: 'Timeline', icon: History, description: 'Every event, in order' },
   { route: 'plan', label: 'Monthly plan', icon: Wallet, description: 'Plan the month ahead' },
   { route: 'cycles', label: 'Cycles', icon: Scale, description: 'Reconciliation and gaps' },
   { route: 'instalments', label: 'Instalments', icon: ListTree, description: 'Plan register' },
@@ -55,6 +58,7 @@ const NAV: NavItem[] = [
 const TITLES: Record<Route, { title: string; subtitle: string }> = {
   upload: { title: 'Upload', subtitle: 'Statements are read in this browser tab and never sent anywhere' },
   overview: { title: 'Overview', subtitle: 'Where you stand, and what in the figures does not look right' },
+  timeline: { title: 'Timeline', subtitle: 'Everything the loaded statements record, on one chronological axis' },
   plan: { title: 'Monthly plan', subtitle: 'What comes in, what is already spoken for, and what is left' },
   cycles: { title: 'Cycles', subtitle: 'Opening + charges − payments = closing, checked on every cycle' },
   instalments: { title: 'Instalments', subtitle: 'Every plan across every statement, and what each one costs' },
@@ -108,7 +112,9 @@ export function App() {
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
-      const n = Number(e.key);
+      // 1–9 select the first nine sections; 0 selects the tenth, so every
+      // section keeps a single-key shortcut once the list passed nine.
+      const n = e.key === '0' ? 10 : Number(e.key);
       if (!Number.isInteger(n) || n < 1 || n > NAV.length) return;
       const target = NAV[n - 1]!;
       if (portfolio.isEmpty && target.route !== 'upload') return;
@@ -157,6 +163,7 @@ export function App() {
         counts={{
           upload: files.length,
           overview: openAnomalies,
+          timeline: 0,
           plan: 0,
           cycles: portfolio.reconciliationSummary.failed.length + portfolio.chain.gaps.length,
           instalments: portfolio.register.plans.filter((p) => p.remaining > 0).length,
@@ -249,6 +256,7 @@ export function App() {
                 onGoToUpload={() => navigate('upload')}
               />
             ) : null}
+            {route === 'timeline' ? <TimelineView portfolio={portfolio} /> : null}
             {route === 'plan' ? <PlanView portfolio={portfolio} rules={rules} store={planStore} /> : null}
             {route === 'cycles' ? <CyclesView portfolio={portfolio} /> : null}
             {route === 'instalments' ? <InstalmentsView portfolio={portfolio} /> : null}
@@ -395,8 +403,8 @@ function Sidebar({
                   navigate(item.route);
                 }}
                 aria-current={active ? 'page' : undefined}
-                aria-keyshortcuts={String(i + 1)}
-                title={`${item.description} · press ${i + 1}`}
+                aria-keyshortcuts={String((i + 1) % 10)}
+                title={`${item.description} · press ${(i + 1) % 10}`}
                 className={cn(
                   'flex items-start gap-2.5 rounded-md px-2.5 py-2',
                   'transition-[background-color,color,box-shadow] duration-150 ease-out',
@@ -433,7 +441,7 @@ function Sidebar({
 
       <div className="p-3 text-[10.5px] leading-relaxed" style={{ color: 'var(--ink-muted)', borderTop: '1px solid var(--line)' }}>
         Seylan and Sampath supported. No file leaves this tab.
-        <span className="mt-1 block">Press 1–{NAV.length} to jump between sections.</span>
+        <span className="mt-1 block">Press 1–9 and 0 to jump between sections.</span>
       </div>
     </nav>
   );
