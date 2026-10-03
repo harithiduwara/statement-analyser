@@ -515,3 +515,51 @@ function renderDonutTooltip(props: TooltipContentProps) {
     />
   );
 }
+
+// --- money in and out, by month --------------------------------------------
+
+export interface FlowDatum {
+  label: string;
+  moneyIn: number;
+  moneyOut: number;
+}
+
+/**
+ * Grouped bars, one pair per month: what was paid in and what was spent out.
+ * Two measures of the same unit and scale, so one chart with two series is
+ * right; the legend and hover carry which is which.
+ */
+export function MonthlyFlowChart({ data }: { data: FlowDatum[] }) {
+  return (
+    <ChartFrame
+      title="Money in and out, by month"
+      unit="LKR per month"
+      note="in = payments that settle the account · out = spending, reversals removed"
+      height={280}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 24, left: 56 }} barCategoryGap="22%" barGap={2}>
+          <CartesianGrid vertical={false} stroke="var(--line)" />
+          <XAxis
+            dataKey="label"
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={{ stroke: 'var(--line-strong)' }}
+            label={{ value: 'MONTH', position: 'insideBottom', offset: -16, style: AXIS_LABEL }}
+          />
+          <YAxis
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={compactLkr}
+            label={{ value: 'LKR', angle: -90, position: 'insideLeft', offset: -8, style: AXIS_LABEL }}
+          />
+          <Tooltip cursor={{ fill: 'var(--surface-sunken)' }} content={makeTooltip((l) => l)} />
+          <Legend wrapperStyle={legendStyle} iconType="square" iconSize={9} verticalAlign="top" align="left" />
+          <Bar {...STATIC_MARK} dataKey="moneyIn" name="In (paid)" maxBarSize={46} fill={SERIES[2]} radius={[3, 3, 0, 0]} />
+          <Bar {...STATIC_MARK} dataKey="moneyOut" name="Out (spent)" maxBarSize={46} fill={SERIES[1]} radius={[3, 3, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}

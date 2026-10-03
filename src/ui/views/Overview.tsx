@@ -3,7 +3,7 @@ import type { Anomaly } from '@/analysis/anomalies';
 import { formatMoney } from '@/lib/money';
 import { formatDate } from '@/lib/dates';
 import { Button, Chip, EmptyState, Panel, PanelHeader, Stat, type Tone } from '../primitives';
-import { DecompositionChart } from '../charts';
+import { DecompositionChart, MonthlyFlowChart } from '../charts';
 import { ISSUER_LABEL } from '@/domain/types';
 
 export function OverviewView({
@@ -154,6 +154,16 @@ export function OverviewView({
           </table>
         </div>
       </Panel>
+
+      {portfolio.flow.length > 0 ? (
+        <MonthlyFlowChart
+          data={portfolio.flow.map((f) => ({
+            label: f.month.slice(2),
+            moneyIn: f.moneyIn,
+            moneyOut: f.moneyOut,
+          }))}
+        />
+      ) : null}
 
       {portfolio.decomposition.length > 0 ? (
         <DecompositionChart

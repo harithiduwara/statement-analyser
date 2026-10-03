@@ -7,6 +7,7 @@ import { buildBorrowingCost, type BorrowingCostReport } from './borrowingCost';
 import { buildForwardSchedule, type ForwardSchedule } from './forward';
 import { analyseChain, type ChainAnalysis } from './gaps';
 import { decomposeCycles, type CycleDecomposition } from './decomposition';
+import { monthlyFlow, type MonthFlow } from './flow';
 import { detectAnomalies, type Anomaly } from './anomalies';
 
 /**
@@ -44,6 +45,8 @@ export interface Portfolio {
   forward: ForwardSchedule;
   chain: ChainAnalysis;
   decomposition: CycleDecomposition[];
+  /** Money in and out, per calendar month. */
+  flow: MonthFlow[];
   anomalies: Anomaly[];
   positions: CardPosition[];
 
@@ -73,6 +76,7 @@ export function buildPortfolio(statements: readonly Statement[]): Portfolio {
   const forward = buildForwardSchedule(register);
   const chain = analyseChain(ordered);
   const decomposition = decomposeCycles(ordered, reversals);
+  const flow = monthlyFlow(ordered, decomposition);
   const anomalies = detectAnomalies({ statements: ordered, reconciliations, reversals, chain });
   const positions = buildPositions(ordered, chain);
 
@@ -101,6 +105,7 @@ export function buildPortfolio(statements: readonly Statement[]): Portfolio {
     forward,
     chain,
     decomposition,
+    flow,
     anomalies,
     positions,
     statementBalance,
