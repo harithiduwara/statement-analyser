@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Portfolio } from '@/analysis/portfolio';
 import {
   breakdownByCategory,
+  categoryMonthlySeries,
   CATEGORIES,
   compileRules,
   type Category,
@@ -10,7 +11,7 @@ import {
 } from '@/analysis/categories';
 import { formatMoney } from '@/lib/money';
 import { Button, Chip, EmptyState, Panel, PanelHeader } from '../primitives';
-import { RankedBarChart } from '../charts';
+import { MonthlyAreaChart, RankedBarChart, SERIES } from '../charts';
 
 export function CategoriesView({
   portfolio,
@@ -29,6 +30,18 @@ export function CategoriesView({
   const breakdown = useMemo(
     () =>
       breakdownByCategory(
+        portfolio.statements,
+        compiled,
+        portfolio.reversals,
+        portfolio.register,
+        view,
+      ),
+    [portfolio.statements, portfolio.reversals, portfolio.register, compiled, view],
+  );
+
+  const trends = useMemo(
+    () =>
+      categoryMonthlySeries(
         portfolio.statements,
         compiled,
         portfolio.reversals,
@@ -95,6 +108,42 @@ export function CategoriesView({
           }))}
           {...(breakdown.unclassifiedCount > 0 ? { highlightNote: 'unclassified' } : {})}
         />
+      ) : null}
+
+      {trends.months.length >= 2 ? (
+        <MonthlyAreaChart
+          title="Monthly spend"
+          unit="LKR per month"
+          note={`${view} view · total ${formatMoney(breakdown.grandTotal)}`}
+          seriesName="Spent"
+          color={SERIES[1]}
+          data={trends.months.map((month, i) => ({ month, value: trends.monthlyTotal[i] ?? 0 }))}
+        />
+      ) : null}
+
+      {trends.months.length >= 2 && trends.series.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+            <h2 className="text-[13px] font-semibold tracking-tight">Category trends</h2>
+            <span className="text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+              monthly spend per category · each panel on its own scale · {view} view
+            </span>
+          </div>
+          <div className="stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {trends.series.map((s) => (
+              <MonthlyAreaChart
+                key={s.category}
+                compact
+                height={170}
+                title={s.category}
+                unit={`${formatMoney(s.total)} total`}
+                seriesName={s.category}
+                color={SERIES[1]}
+                data={trends.months.map((month, i) => ({ month, value: s.monthly[i] ?? 0 }))}
+              />
+            ))}
+          </div>
+        </div>
       ) : null}
 
       <Panel>

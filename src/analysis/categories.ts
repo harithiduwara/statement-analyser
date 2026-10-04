@@ -191,58 +191,18 @@ export function breakdownByCategory(
   register: InstallmentRegister,
   view: SpendView,
 ): CategoryBreakdown {
-  /*
-   * A reversed debit is only spending if it was re-booked as a plan. A
-   * purchase that was reversed and financed still happened; a fuel surcharge
-   * that was levied and refunded did not, and counting it would inflate the
-   * economic view by every charge the bank ever undid.
-   */
-  const planOriginations = new Set(
-    register.plans
-      .map((p) => p.originationTxnId)
-      .filter((id): id is string => id !== undefined),
-  );
   const totals = new Map<Category, { amount: Money; count: number }>();
   const months = new Map<string, Money>();
   let grandTotal = 0;
 
-  for (const statement of statements) {
-    for (const txn of statement.transactions) {
-      if (txn.amount <= 0) continue;
-
-      const wasReversed = reversals.byTxnId.has(txn.id);
-      const isPlanOrigination = planOriginations.has(txn.id);
-
-      // A debit the bank undid without financing it never happened.
-      if (wasReversed && !isPlanOrigination) continue;
-
-      if (view === 'economic') {
-        // The financed purchase is counted once, at origination. Its
-        // repayments and recurring fee are that same purchase arriving in
-        // instalments, so counting them too would double it.
-        if (
-          txn.classification === 'installment_repayment' ||
-          txn.classification === 'installment_processing_fee'
-        ) {
-          continue;
-        }
-      } else if (isPlanOrigination) {
-        // Cash view: the origination was reversed off the account, so no cash
-        // moved for it. The repayments below are what actually left.
-        continue;
-      }
-
-      const category = categoriseTxn(txn, rules);
-      const entry = totals.get(category) ?? { amount: 0, count: 0 };
-      entry.amount = roundMoney(entry.amount + txn.amount);
-      entry.count += 1;
-      totals.set(category, entry);
-
-      const key = monthKey(txn.postDate);
-      months.set(key, roundMoney((months.get(key) ?? 0) + txn.amount));
-      grandTotal = roundMoney(grandTotal + txn.amount);
-    }
-  }
+  forEachSpend(statements, rules, reversals, register, view, (category, month, amount) => {
+    const entry = totals.get(category) ?? { amount: 0, count: 0 };
+    entry.amount = roundMoney(entry.amount + amount);
+    entry.count += 1;
+    totals.set(category, entry);
+    months.set(month, roundMoney((months.get(month) ?? 0) + amount));
+    grandTotal = roundMoney(grandTotal + amount);
+  });
 
   const list: CategoryTotal[] = [...totals.entries()]
     .map(([category, { amount, count }]) => ({
@@ -262,4 +222,91 @@ export function breakdownByCategory(
       .map(([month, total]) => ({ month, total }))
       .sort((a, b) => a.month.localeCompare(b.month)),
   };
+}
+
+/**
+ * The one definition of what counts as spend, shared by every category view, so
+ * a snapshot total and a monthly trend can never disagree about which lines are
+ * in. A reversed debit is only spending if it was re-booked as a plan: a
+ * purchase reversed and financed still happened; a surcharge levied and refunded
+ * did not. In the economic view the financed purchase is counted once, at
+ * origination, so its repayments and recurring fee are skipped; in the cash view
+ * the origination (reversed off the account) is skipped and the repayments are
+ * what counts.
+ */
+function forEachSpend(
+  statements: readonly Statement[],
+  rules: readonly CompiledRule[],
+  reversals: ReversalAnalysis,
+  register: InstallmentRegister,
+  view: SpendView,
+  visit: (category: Category, month: string, amount: Money) => void,
+): void {
+  const planOriginations = new Set(
+    register.plans
+      .map((p) => p.originationTxnId)
+      .filter((id): id is string => id !== undefined),
+  );
+
+  for (const statement of statements) {
+    for (const txn of statement.transactions) {
+      if (txn.amount <= 0) continue;
+
+      const wasReversed = reversals.byTxnId.has(txn.id);
+      const isPlanOrigination = planOriginations.has(txn.id);
+      if (wasReversed && !isPlanOrigination) continue;
+
+      if (view === 'economic') {
+        if (
+          txn.classification === 'installment_repayment' ||
+          txn.classification === 'installment_processing_fee'
+        ) {
+          continue;
+        }
+      } else if (isPlanOrigination) {
+        continue;
+      }
+
+      visit(categoriseTxn(txn, rules), monthKey(txn.postDate), txn.amount);
+    }
+  }
+}
+
+/** Per-category monthly spend, aligned to one shared month axis for trends. */
+export interface CategoryMonthlySeries {
+  /** Every month any category had spend, ascending -- the shared x-axis. */
+  months: string[];
+  /** Total spend per month, aligned to `months`. */
+  monthlyTotal: Money[];
+  /** One entry per category with spend, largest total first; `monthly` aligns to `months`. */
+  series: { category: Category; total: Money; monthly: Money[] }[];
+}
+
+export function categoryMonthlySeries(
+  statements: readonly Statement[],
+  rules: readonly CompiledRule[],
+  reversals: ReversalAnalysis,
+  register: InstallmentRegister,
+  view: SpendView,
+): CategoryMonthlySeries {
+  const byCategory = new Map<Category, Map<string, Money>>();
+  const monthTotals = new Map<string, Money>();
+
+  forEachSpend(statements, rules, reversals, register, view, (category, month, amount) => {
+    monthTotals.set(month, roundMoney((monthTotals.get(month) ?? 0) + amount));
+    const perMonth = byCategory.get(category) ?? new Map<string, Money>();
+    perMonth.set(month, roundMoney((perMonth.get(month) ?? 0) + amount));
+    byCategory.set(category, perMonth);
+  });
+
+  const months = [...monthTotals.keys()].sort((a, b) => a.localeCompare(b));
+  const monthlyTotal = months.map((month) => monthTotals.get(month) ?? 0);
+  const series = [...byCategory.entries()]
+    .map(([category, perMonth]) => {
+      const monthly = months.map((month) => perMonth.get(month) ?? 0);
+      return { category, total: roundMoney(monthly.reduce((a, b) => a + b, 0)), monthly };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  return { months, monthlyTotal, series };
 }

@@ -1,17 +1,31 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Portfolio } from '@/analysis/portfolio';
 import type { InstallmentPlan } from '@/analysis/installments';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, roundMoney } from '@/lib/money';
 import { formatPercent } from '@/lib/finance';
-import { formatMonthKey } from '@/lib/dates';
+import { formatMonthKey, monthKey } from '@/lib/dates';
 import { Chip, EmptyState, Panel, PanelHeader } from '../primitives';
-import { RankedBarChart, compactLkr } from '../charts';
+import { MonthlyAreaChart, RankedBarChart, SERIES, compactLkr } from '../charts';
 
 type SortKey = 'remainingValue' | 'monthly' | 'costOfCredit' | 'remaining' | 'merchant';
 
 export function InstalmentsView({ portfolio }: { portfolio: Portfolio }) {
   const [sort, setSort] = useState<SortKey>('remainingValue');
   const { register } = portfolio;
+
+  // Instalment billed per calendar month, summed across cards and reversals
+  // removed -- the decomposition already holds the instalment component per
+  // cycle, so this just buckets it by month.
+  const instalmentsByMonth = useMemo(() => {
+    const byMonth = new Map<string, number>();
+    for (const d of portfolio.decomposition) {
+      const key = monthKey(d.statementDate);
+      byMonth.set(key, roundMoney((byMonth.get(key) ?? 0) + d.instalments));
+    }
+    return [...byMonth.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([month, value]) => ({ month, value }));
+  }, [portfolio.decomposition]);
 
   if (register.plans.length === 0) {
     return (
@@ -65,6 +79,17 @@ export function InstalmentsView({ portfolio }: { portfolio: Portfolio }) {
             highlight: (p.costOfCredit ?? 0) > 1e-6,
           }))}
           highlightNote="carries a financing cost"
+        />
+      ) : null}
+
+      {instalmentsByMonth.length >= 2 ? (
+        <MonthlyAreaChart
+          title="Instalments billed, by month"
+          unit="LKR per month"
+          note="repayment and recurring fee together, reversals removed"
+          seriesName="Instalments"
+          color={SERIES[0]}
+          data={instalmentsByMonth}
         />
       ) : null}
 

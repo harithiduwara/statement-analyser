@@ -1,6 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -652,6 +654,92 @@ export function MonthlyFlowChart({ data }: { data: FlowDatum[] }) {
           <Bar {...STATIC_MARK} dataKey="moneyIn" name="In (paid)" maxBarSize={46} fill={SERIES[2]} radius={[3, 3, 0, 0]} />
           <Bar {...STATIC_MARK} dataKey="moneyOut" name="Out (spent)" maxBarSize={46} fill={SERIES[1]} radius={[3, 3, 0, 0]} />
         </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
+
+// --- a monthly value over time ----------------------------------------------
+
+export interface TrendDatum {
+  month: string;
+  value: number;
+}
+
+/**
+ * One measure over the months, as a filled line. A single series, so no legend
+ * -- the title names it. Used full-size for a headline trend and, with
+ * `compact`, as a panel in a small-multiples grid where the axis titles would
+ * only crowd it. Each chart scales its own y-axis, so a small series in a grid
+ * keeps its shape; the panel's figure carries the magnitude.
+ */
+export function MonthlyAreaChart({
+  title,
+  unit,
+  note,
+  data,
+  seriesName,
+  color = SERIES[0],
+  height = 240,
+  compact = false,
+}: {
+  title: string;
+  unit: string;
+  note?: ReactNode;
+  data: TrendDatum[];
+  seriesName: string;
+  color?: string;
+  height?: number;
+  compact?: boolean;
+}) {
+  const margin = compact
+    ? { top: 6, right: 10, bottom: 18, left: 38 }
+    : { top: 8, right: 12, bottom: 26, left: 52 };
+  return (
+    <ChartFrame title={title} unit={unit} {...(note === undefined ? {} : { note })} height={height}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={margin}>
+          <CartesianGrid vertical={false} stroke="var(--line)" />
+          <XAxis
+            dataKey="month"
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={{ stroke: 'var(--line-strong)' }}
+            tickFormatter={formatMonthKey}
+            minTickGap={compact ? 34 : 24}
+            {...(compact
+              ? {}
+              : { label: { value: 'MONTH', position: 'insideBottom', offset: -14, style: AXIS_LABEL } })}
+          />
+          <YAxis
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={compactLkr}
+            width={compact ? 38 : 48}
+            // Headroom so a flat series does not run along the top edge.
+            domain={[0, (max: number) => Math.ceil(max * 1.12)]}
+            {...(compact
+              ? {}
+              : { label: { value: 'LKR', angle: -90, position: 'insideLeft', offset: -6, style: AXIS_LABEL } })}
+          />
+          <Tooltip
+            cursor={{ stroke: 'var(--line-strong)', strokeWidth: 1 }}
+            content={makeTooltip((l) => formatMonthKey(l))}
+          />
+          <Area
+            {...STATIC_MARK}
+            type="monotone"
+            dataKey="value"
+            name={seriesName}
+            stroke={color}
+            strokeWidth={2}
+            fill={color}
+            fillOpacity={0.14}
+            dot={false}
+            activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface)' }}
+          />
+        </AreaChart>
       </ResponsiveContainer>
     </ChartFrame>
   );
