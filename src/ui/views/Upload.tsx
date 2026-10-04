@@ -45,6 +45,8 @@ export function UploadView({
 
   return (
     <div className="space-y-4">
+      {files.length === 0 ? <Hero /> : null}
+
       <PrivacyBanner />
 
       <div aria-live="polite" className="sr-only">
@@ -143,6 +145,44 @@ export function UploadView({
           Reload the page and it starts empty again.
         </EmptyState>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * A welcome line for the empty landing screen -- one of a few on-brand lines,
+ * picked once per visit so it has a little life without changing under the
+ * reader. Honest and calm, like the rest of the app: insight first, and the
+ * privacy promise it can actually keep.
+ */
+const HERO_QUOTES = [
+  'See where the money really went.',
+  'Your statements, finally making sense.',
+  'Turn a stack of statements into a story you can read.',
+  'Every rupee accounted for — and nothing leaves this tab.',
+  'Understand your spending. Keep it to yourself.',
+] as const;
+
+function Hero() {
+  const [quote] = useState(
+    () => HERO_QUOTES[Math.floor(Math.random() * HERO_QUOTES.length)] ?? HERO_QUOTES[0],
+  );
+  return (
+    <div className="rise px-2 py-5 text-center sm:py-7">
+      <p className="mx-auto max-w-2xl text-[21px] font-semibold leading-tight tracking-tight sm:text-[25px]">
+        {quote}
+      </p>
+      <span
+        aria-hidden
+        className="mx-auto mt-3 block h-[3px] w-10 rounded-full"
+        style={{ background: 'var(--accent)' }}
+      />
+      <p
+        className="mx-auto mt-3 max-w-lg text-[13px] leading-relaxed"
+        style={{ color: 'var(--ink-secondary)' }}
+      >
+        Upload your Seylan and Sampath statements for a clear overview of your spending.
+      </p>
     </div>
   );
 }
