@@ -110,8 +110,8 @@ function ChartExport({ getSvg, title }: { getSvg: () => SVGSVGElement | null; ti
     try {
       const chartImage = await import('@/export/chartImage');
       const base = slugify(title);
-      if (kind === 'pdf') await chartImage.exportChartPdf(svg, { title, filename: `${base}.pdf` });
-      else await chartImage.exportChartPng(svg, `${base}.png`);
+      if (kind === 'pdf') await chartImage.exportChartPdf(svg, { title, name: base });
+      else await chartImage.exportChartPng(svg, base);
     } catch {
       // Nothing is sent or stored, so a failed export leaves no trace to undo.
     } finally {

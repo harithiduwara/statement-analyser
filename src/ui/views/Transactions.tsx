@@ -12,6 +12,7 @@ import {
 } from '@/analysis/categories';
 import { formatMoney } from '@/lib/money';
 import { formatDate } from '@/lib/dates';
+import { downloadBlob, fileStamp } from '@/export/download';
 import { Button, Chip, EmptyState, Panel, PanelHeader } from '../primitives';
 
 /** Rows rendered beyond the viewport at a time. */
@@ -311,12 +312,10 @@ function downloadCsv(rows: readonly Row[]): void {
   ]);
 
   const csv = [header, ...body].map((line) => line.map(escapeCsv).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(
+    new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' }),
+    `transactions-${fileStamp()}.csv`,
+  );
 }
 
 function escapeCsv(value: string | number): string {

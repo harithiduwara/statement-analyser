@@ -1,4 +1,4 @@
-import { downloadBlob } from './download';
+import { downloadBlob, fileStamp } from './download';
 
 /**
  * Export a chart as an image, with no library and no network.
@@ -20,16 +20,18 @@ export interface ChartImage {
   title?: string;
 }
 
-export async function exportChartPng(svg: SVGSVGElement, filename: string): Promise<void> {
+/** `name` is the base (no extension); a local timestamp and `.png` are appended. */
+export async function exportChartPng(svg: SVGSVGElement, name: string): Promise<void> {
   const canvas = await rasterise(svg);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('The chart could not be encoded as a PNG.');
-  downloadBlob(blob, filename);
+  downloadBlob(blob, `${name}-${fileStamp()}.png`);
 }
 
+/** `name` is the base (no extension); a local timestamp and `.pdf` are appended. */
 export async function exportChartPdf(
   svg: SVGSVGElement,
-  options: { title?: string; filename: string },
+  options: { title?: string; name: string },
 ): Promise<void> {
   const canvas = await rasterise(svg);
   const jpeg = dataUrlToBytes(canvas.toDataURL('image/jpeg', 0.95));
@@ -41,7 +43,7 @@ export async function exportChartPdf(
       ...(options.title === undefined ? {} : { title: options.title }),
     },
   ]);
-  downloadBlob(new Blob([pdf as BlobPart], { type: 'application/pdf' }), options.filename);
+  downloadBlob(new Blob([pdf as BlobPart], { type: 'application/pdf' }), `${options.name}-${fileStamp()}.pdf`);
 }
 
 /** Styles read from the live element and written inline so the clone stands alone. */

@@ -4,7 +4,7 @@ import { EXCEL_MONEY_FORMAT } from '@/lib/money';
 import type { Portfolio } from '@/analysis/portfolio';
 import { type CategoryRule, compileRules, breakdownByCategory } from '@/analysis/categories';
 import { buildTimeline } from '@/analysis/timeline';
-import { downloadBlob, todayStamp } from './download';
+import { downloadBlob, fileStamp } from './download';
 
 /**
  * The Excel export.
@@ -59,7 +59,7 @@ export async function downloadWorkbook(
     new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }),
-    `statement-analyser-${todayStamp()}.xlsx`,
+    `statement-analyser-${fileStamp()}.xlsx`,
   );
 }
 
