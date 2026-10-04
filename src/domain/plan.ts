@@ -42,6 +42,8 @@ export interface PlanSeed {
   cardInstallments: Money;
   /** Estimated monthly subscription spend, from category classification. */
   subscriptions: Money;
+  /** Estimated monthly utilities & telco spend, from category classification. */
+  utilities: Money;
 }
 
 export interface WhereSlice {
@@ -62,7 +64,8 @@ export interface PlanSummary {
   bills: Money;
   cardInstallments: Money;
   subscriptions: Money;
-  /** bills + card instalments + subscriptions. */
+  utilities: Money;
+  /** bills + card instalments + subscriptions + utilities. */
   committed: Money;
   savings: Money;
   /** committed + savings: everything already spoken for. */
@@ -76,6 +79,8 @@ export interface PlanSummary {
   spokenForPct?: number;
   /** savings / takeHome. */
   savingsPct?: number;
+  /** True once any income line has been entered: the plan is set up. */
+  hasIncome: boolean;
   overCommitted: boolean;
 }
 
@@ -90,16 +95,25 @@ export function computePlan(plan: MonthlyPlan, seed: PlanSeed): PlanSummary {
   const bills = total(plan.bills);
   const cardInstallments = roundMoney(Math.max(0, seed.cardInstallments));
   const subscriptions = roundMoney(Math.max(0, seed.subscriptions));
-  const committed = roundMoney(bills + cardInstallments + subscriptions);
+  const utilities = roundMoney(Math.max(0, seed.utilities));
+  const committed = roundMoney(bills + cardInstallments + subscriptions + utilities);
 
   const savings = total(plan.savings);
   const spokenFor = roundMoney(committed + savings);
   const leftToSpend = roundMoney(takeHome - spokenFor);
 
+  // Four groups, so the ring stays within the validated palette: subscriptions
+  // and utilities -- both small recurring commitments -- share one slice. The
+  // committed section lists each of them on its own.
   const groups = [
-    { key: 'bills', label: 'Bills & household', amount: bills, sourced: false },
     { key: 'installments', label: 'Card instalments', amount: cardInstallments, sourced: true },
-    { key: 'subscriptions', label: 'Subscriptions', amount: subscriptions, sourced: true },
+    {
+      key: 'recurring',
+      label: 'Subscriptions & utilities',
+      amount: roundMoney(subscriptions + utilities),
+      sourced: true,
+    },
+    { key: 'bills', label: 'Bills & household', amount: bills, sourced: false },
     { key: 'savings', label: 'Savings & investments', amount: savings, sourced: false },
   ];
   const base = groups.reduce((acc, g) => acc + g.amount, 0);
@@ -119,14 +133,18 @@ export function computePlan(plan: MonthlyPlan, seed: PlanSeed): PlanSummary {
     bills,
     cardInstallments,
     subscriptions,
+    utilities,
     committed,
     savings,
     spokenFor,
     leftToSpend,
     where,
+    hasIncome: income > 0,
     ...(committedPct === undefined ? {} : { committedPct }),
     ...(spokenForPct === undefined ? {} : { spokenForPct }),
     ...(savingsPct === undefined ? {} : { savingsPct }),
-    overCommitted: leftToSpend < 0,
+    // Only a plan that has an income can be "over-committed"; with none set it
+    // is simply not filled in yet, which the view says instead of warning.
+    overCommitted: income > 0 && leftToSpend < 0,
   };
 }
