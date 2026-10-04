@@ -119,11 +119,19 @@ function ChartExport({ getSvg, title }: { getSvg: () => SVGSVGElement | null; ti
     }
   };
 
+  // Warm the lazy export chunk on intent, so the first export is instant and is
+  // cached from the deploy this tab loaded.
+  const warm = (): void => {
+    import('@/export/chartImage').catch(() => {});
+  };
+
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        onMouseEnter={warm}
+        onFocus={warm}
         disabled={busy}
         aria-haspopup="menu"
         aria-expanded={open}

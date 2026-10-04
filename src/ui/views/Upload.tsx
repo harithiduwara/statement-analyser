@@ -183,10 +183,21 @@ function BackupRestore({
   canExport: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const prefetched = useRef(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [note, setNote] = useState<{ read: number; issues: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Warm the lazy export chunks the moment the reader shows intent, so the
+  // first click is instant -- and so they are cached from the deploy this tab
+  // loaded, before a later deploy can replace the files they point at.
+  const prefetch = (): void => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    import('@/export/workbook').catch(() => {});
+    import('@/export/importWorkbook').catch(() => {});
+  };
 
   const doExport = async (): Promise<void> => {
     setError(null);
@@ -220,7 +231,7 @@ function BackupRestore({
         subtitle="Save everything loaded as an Excel file — a readable report that also loads back here, so you never re-read a statement you already have."
       />
       <div className="p-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" onMouseEnter={prefetch} onFocus={prefetch}>
           <Button variant="primary" onClick={() => void doExport()} disabled={!canExport || exporting}>
             <FileDown size={13} aria-hidden />
             {exporting ? 'Preparing…' : 'Export to Excel'}
@@ -269,12 +280,44 @@ function BackupRestore({
         ) : null}
 
         {error ? (
-          <p className="mt-3 text-[11.5px]" style={{ color: 'var(--critical)' }}>
-            {error}
-          </p>
+          looksLikeStaleChunk(error) ? (
+            <div
+              className="mt-3 rounded-md px-3 py-2.5 text-[11.5px]"
+              style={{ border: '1px solid var(--warning)' }}
+            >
+              <p className="font-medium" style={{ color: 'var(--warning)' }}>
+                The app updated since this tab was opened.
+              </p>
+              <p className="mt-0.5" style={{ color: 'var(--ink-secondary)' }}>
+                The export tools could not load because this page is from an older version. Reload to
+                get the latest, then export again. (Reloading clears loaded statements, so if you have
+                not backed them up, note them first.)
+              </p>
+              <div className="mt-2">
+                <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
+                  Reload page
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-[11.5px]" style={{ color: 'var(--critical)' }}>
+              {error}
+            </p>
+          )
         ) : null}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * A dynamic import that fails almost always means this tab is from a deploy
+ * whose chunk files a newer deploy has replaced -- the lazy export code 404s.
+ * Reloading fixes it, so that failure gets its own actionable message.
+ */
+function looksLikeStaleChunk(message: string): boolean {
+  return /module script|dynamically imported|failed to fetch|importing a module|load.*chunk|chunk.*load/i.test(
+    message,
   );
 }
 
