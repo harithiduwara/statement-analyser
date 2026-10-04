@@ -3,6 +3,7 @@ import type { Portfolio } from '@/analysis/portfolio';
 import {
   breakdownByCategory,
   categoryMonthlySeries,
+  dailySpend,
   CATEGORIES,
   compileRules,
   type Category,
@@ -11,7 +12,7 @@ import {
 } from '@/analysis/categories';
 import { formatMoney } from '@/lib/money';
 import { Button, Chip, EmptyState, Panel, PanelHeader } from '../primitives';
-import { MonthlyAreaChart, RankedBarChart, SERIES } from '../charts';
+import { DailyBarChart, MonthlyAreaChart, RankedBarChart, SERIES } from '../charts';
 
 export function CategoriesView({
   portfolio,
@@ -48,6 +49,11 @@ export function CategoriesView({
         portfolio.register,
         view,
       ),
+    [portfolio.statements, portfolio.reversals, portfolio.register, compiled, view],
+  );
+
+  const daily = useMemo(
+    () => dailySpend(portfolio.statements, compiled, portfolio.reversals, portfolio.register, view),
     [portfolio.statements, portfolio.reversals, portfolio.register, compiled, view],
   );
 
@@ -118,6 +124,15 @@ export function CategoriesView({
           seriesName="Spent"
           color={SERIES[1]}
           data={trends.months.map((month, i) => ({ month, value: trends.monthlyTotal[i] ?? 0 }))}
+        />
+      ) : null}
+
+      {daily.length >= 2 ? (
+        <DailyBarChart
+          title="Spend by day"
+          unit="LKR per day"
+          note={`${view} view · every loaded day (${daily.length})`}
+          data={daily.map((d) => ({ date: d.date, value: d.amount }))}
         />
       ) : null}
 

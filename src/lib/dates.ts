@@ -127,6 +127,13 @@ export function monthKey(date: IsoDate): string {
   return date.slice(0, 7);
 }
 
+/** Add whole days to a `YYYY-MM-DD` date. UTC-based, so DST never shifts it. */
+export function addDays(date: IsoDate, delta: number): IsoDate {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Add whole months to a `YYYY-MM` key. */
 export function addMonths(key: string, delta: number): string {
   const year = Number(key.slice(0, 4));

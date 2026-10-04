@@ -20,7 +20,7 @@ import {
   type TooltipContentProps,
 } from 'recharts';
 import { formatMoney } from '@/lib/money';
-import { formatMonthKey } from '@/lib/dates';
+import { formatDate, formatMonthKey } from '@/lib/dates';
 
 /**
  * Chart kit.
@@ -748,6 +748,71 @@ export function MonthlyAreaChart({
             activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface)' }}
           />
         </AreaChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
+
+// --- spend per calendar day -------------------------------------------------
+
+export interface DailyDatum {
+  date: string;
+  value: number;
+}
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** `2026-03-15` -> `15 Mar` for a sparse daily tick; the year is in the title. */
+function dayTick(iso: string): string {
+  return `${Number(iso.slice(8, 10))} ${MONTH_ABBR[Number(iso.slice(5, 7)) - 1] ?? ''}`;
+}
+
+/**
+ * Spend per calendar day: one thin bar each, over a continuous time axis so a
+ * gap in spending reads as a gap. A single series, so no legend -- the title
+ * names it; ticks are sparse and each day is named on hover.
+ */
+export function DailyBarChart({
+  data,
+  title,
+  unit,
+  note,
+  color = SERIES[1],
+  height = 280,
+}: {
+  data: DailyDatum[];
+  title: string;
+  unit: string;
+  note?: ReactNode;
+  color?: string;
+  height?: number;
+}) {
+  return (
+    <ChartFrame title={title} unit={unit} {...(note === undefined ? {} : { note })} height={height}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 8, right: 12, bottom: 28, left: 56 }} barCategoryGap="12%">
+          <CartesianGrid vertical={false} stroke="var(--line)" />
+          <XAxis
+            dataKey="date"
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={{ stroke: 'var(--line-strong)' }}
+            tickFormatter={dayTick}
+            minTickGap={44}
+            interval="preserveStartEnd"
+            label={{ value: 'DAY', position: 'insideBottom', offset: -16, style: AXIS_LABEL }}
+          />
+          <YAxis
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={compactLkr}
+            domain={[0, (max: number) => Math.ceil(max * 1.1)]}
+            label={{ value: 'LKR', angle: -90, position: 'insideLeft', offset: -8, style: AXIS_LABEL }}
+          />
+          <Tooltip cursor={{ fill: 'var(--surface-sunken)' }} content={makeTooltip((l) => formatDate(l))} />
+          <Bar {...STATIC_MARK} dataKey="value" name="Spent" fill={color} maxBarSize={14} radius={[2, 2, 0, 0]} />
+        </BarChart>
       </ResponsiveContainer>
     </ChartFrame>
   );

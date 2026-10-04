@@ -1,5 +1,5 @@
-import { type Money, type Statement, type Txn } from '@/domain/types';
-import { monthKey } from '@/lib/dates';
+import { type IsoDate, type Money, type Statement, type Txn } from '@/domain/types';
+import { addDays, monthKey } from '@/lib/dates';
 import { roundMoney } from '@/lib/money';
 import type { ReversalAnalysis } from './reversals';
 import type { InstallmentRegister } from './installments';
@@ -195,11 +195,12 @@ export function breakdownByCategory(
   const months = new Map<string, Money>();
   let grandTotal = 0;
 
-  forEachSpend(statements, rules, reversals, register, view, (category, month, amount) => {
+  forEachSpend(statements, rules, reversals, register, view, (category, date, amount) => {
     const entry = totals.get(category) ?? { amount: 0, count: 0 };
     entry.amount = roundMoney(entry.amount + amount);
     entry.count += 1;
     totals.set(category, entry);
+    const month = monthKey(date);
     months.set(month, roundMoney((months.get(month) ?? 0) + amount));
     grandTotal = roundMoney(grandTotal + amount);
   });
@@ -240,7 +241,7 @@ function forEachSpend(
   reversals: ReversalAnalysis,
   register: InstallmentRegister,
   view: SpendView,
-  visit: (category: Category, month: string, amount: Money) => void,
+  visit: (category: Category, date: IsoDate, amount: Money) => void,
 ): void {
   const planOriginations = new Set(
     register.plans
@@ -267,7 +268,7 @@ function forEachSpend(
         continue;
       }
 
-      visit(categoriseTxn(txn, rules), monthKey(txn.postDate), txn.amount);
+      visit(categoriseTxn(txn, rules), txn.postDate, txn.amount);
     }
   }
 }
@@ -292,7 +293,8 @@ export function categoryMonthlySeries(
   const byCategory = new Map<Category, Map<string, Money>>();
   const monthTotals = new Map<string, Money>();
 
-  forEachSpend(statements, rules, reversals, register, view, (category, month, amount) => {
+  forEachSpend(statements, rules, reversals, register, view, (category, date, amount) => {
+    const month = monthKey(date);
     monthTotals.set(month, roundMoney((monthTotals.get(month) ?? 0) + amount));
     const perMonth = byCategory.get(category) ?? new Map<string, Money>();
     perMonth.set(month, roundMoney((perMonth.get(month) ?? 0) + amount));
@@ -309,4 +311,37 @@ export function categoryMonthlySeries(
     .sort((a, b) => b.total - a.total);
 
   return { months, monthlyTotal, series };
+}
+
+/** Total spend on a single calendar day. */
+export interface DailySpendPoint {
+  date: IsoDate;
+  amount: Money;
+}
+
+/**
+ * Spend per calendar day across every loaded statement, as a *continuous* range
+ * from the first day with spend to the last. The empty days in between are kept
+ * (amount 0), so a gap in spending shows as a gap on the time axis rather than
+ * two bars collapsing next to each other on an uneven one.
+ */
+export function dailySpend(
+  statements: readonly Statement[],
+  rules: readonly CompiledRule[],
+  reversals: ReversalAnalysis,
+  register: InstallmentRegister,
+  view: SpendView,
+): DailySpendPoint[] {
+  const byDay = new Map<string, Money>();
+  forEachSpend(statements, rules, reversals, register, view, (_category, date, amount) => {
+    byDay.set(date, roundMoney((byDay.get(date) ?? 0) + amount));
+  });
+  if (byDay.size === 0) return [];
+
+  const days = [...byDay.keys()].sort((a, b) => a.localeCompare(b));
+  const out: DailySpendPoint[] = [];
+  for (let day = days[0]!; day <= days[days.length - 1]!; day = addDays(day, 1)) {
+    out.push({ date: day, amount: byDay.get(day) ?? 0 });
+  }
+  return out;
 }
